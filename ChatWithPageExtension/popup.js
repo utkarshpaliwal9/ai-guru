@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
 
-    messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+    messageElement.textContent = message;
     messagesDiv.appendChild(messageElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
   }
