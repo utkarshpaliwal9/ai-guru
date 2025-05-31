@@ -35,6 +35,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function displayMessage(sender, message) {
     const messageElement = document.createElement('div');
+    messageElement.classList.add('message');
+    if (sender === 'User') {
+      messageElement.classList.add('user-message');
+    } else if (sender === 'Bot' || sender === 'Error') {
+      messageElement.classList.add('bot-message');
+      if (sender === 'Error') {
+        messageElement.classList.add('error-message');
+      }
+    }
+
     messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
     messagesDiv.appendChild(messageElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
