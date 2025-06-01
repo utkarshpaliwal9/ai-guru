@@ -31,10 +31,6 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           return;
         }
         console.log('Background: Content script injected. Waiting for content message...');
-        // After injecting, content.js will send a message with the content.
-        // We need a way to correlate this specific request with the content message.
-        // For simplicity now, we will just send the question to the content script.
-        // A more robust solution would use a request ID.
 
         chrome.tabs.sendMessage(activeTab.id, { type: "GET_PAGE_CONTENT", question: request.question }, async (response) => {
           if (chrome.runtime.lastError) {
@@ -45,50 +41,74 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (response && response.content) {
             console.log("Background: Received content snippet from content script:", response.content.substring(0, 100) + "...");
             
-            // --- AI/NLP Integration Start ---
+            // --- Alfa API Integration Start ---
             const pageContent = response.content;
             const userQuestion = request.question;
 
-            // TODO: Replace with your actual API endpoint and key management strategy.
-            // IMPORTANT: Do NOT hardcode API keys directly in the extension. 
-            // Consider using chrome.storage.local to store user-provided keys or an authentication flow with a backend.
-            const API_ENDPOINT = "YOUR_LLM_API_ENDPOINT_HERE"; 
-            const API_KEY = "YOUR_API_KEY_HERE"; // Replace this or manage securely
+            // Alfa API Configuration
+            const API_HOST = "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
+            const CHAT_HOST = "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io";
+            
+            // TODO: Replace these with your actual values
+            // IMPORTANT: Do NOT hardcode these directly in production. Use chrome.storage.local or a secure method.
+            const AUTH_TOKEN = "YOUR_STATIC_AUTH_TOKEN"; // Replace with your actual token
+            const PROJECT_ID = "YOUR_PROJECT_UUID"; // Replace with your project UUID
 
             try {
-              console.log("Background: Sending content and question to AI API.");
-              const apiResponse = await fetch(API_ENDPOINT, {
+              console.log("Background: Sending content and question to Alfa API.");
+              
+              // Create a combined context from page content and user question
+              const combinedQuery = `Context: ${pageContent}\n\nQuestion: ${userQuestion}`;
+              
+              console.log("Background: Combined query being sent:", combinedQuery.substring(0, 200) + "...");
+
+              // Option 1: Use RAG context API (simpler for your use case)
+              const apiResponse = await fetch(`${API_HOST}/indices/rag-context`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
-                  "Authorization": `Bearer ${API_KEY}` // Adjust auth based on your API
+                  "Authorization": `Bearer ${AUTH_TOKEN}`,
+                  "x-claim": PROJECT_ID
                 },
                 body: JSON.stringify({
-                  context: pageContent, // The content extracted from the page
-                  question: userQuestion // The user's question
-                  // Adjust the payload structure according to your LLM API's requirements
+                  query: combinedQuery,
+                  k: 3 // Number of results to retrieve
                 })
               });
 
               if (!apiResponse.ok) {
                 const errorData = await apiResponse.text();
-                console.error("Background: AI API Error:", apiResponse.status, errorData);
-                sendResponse({ answer: `Sorry, there was an error with the AI service (${apiResponse.status}).` });
+                console.error("Background: Alfa API Error:", apiResponse.status, errorData);
+                sendResponse({ answer: `Sorry, there was an error with the Alfa service (${apiResponse.status}). Error: ${errorData}` });
                 return;
               }
 
               const result = await apiResponse.json();
-              // TODO: Adjust based on the actual structure of your API's response
-              const answer = result.answer || (result.data && result.data.answer) || "No answer found in API response."; 
+              console.log("Background: Received result from Alfa API:", result);
               
-              console.log("Background: Received answer from AI API:", answer);
+              // Extract answer from RAG context response
+              // The exact structure depends on Alfa's response format - you may need to adjust this
+              let answer = "I received a response but couldn't extract a clear answer.";
+              
+              if (result.context && result.context.length > 0) {
+                // If the RAG context returns relevant information
+                answer = `Based on the page content, here's what I found: ${result.context[0].content || result.context[0].text || 'No specific answer found.'}`;
+              } else if (result.answer) {
+                answer = result.answer;
+              } else if (result.response) {
+                answer = result.response;
+              } else {
+                answer = `I processed your question "${userQuestion}" but couldn't find a specific answer in the page content. The API returned: ${JSON.stringify(result).substring(0, 200)}...`;
+              }
+              
+              console.log("Background: Extracted answer:", answer);
               sendResponse({ answer: answer });
 
             } catch (error) {
-              console.error("Background: Failed to call AI API or process its response:", error);
-              sendResponse({ answer: "Sorry, I encountered an error trying to get an answer." });
+              console.error("Background: Failed to call Alfa API or process its response:", error);
+              sendResponse({ answer: "Sorry, I encountered an error trying to get an answer from Alfa. Check the console for details." });
             }
-            // --- AI/NLP Integration End ---
+            // --- Alfa API Integration End ---
 
           } else {
             console.warn("Background: No content received from content script or unexpected response format.");
