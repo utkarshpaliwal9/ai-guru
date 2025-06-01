@@ -3,6 +3,20 @@ document.addEventListener('DOMContentLoaded', function() {
   const userInput = document.getElementById('userInput');
   const messagesDiv = document.getElementById('messages');
 
+  let currentFontSizeScale = 1; // Default scale
+
+  // Load saved font size
+  chrome.storage.local.get(['fontSizeScale'], function(result) {
+    if (result.fontSizeScale) {
+      currentFontSizeScale = result.fontSizeScale;
+      applyFontSize();
+    }
+  });
+
+  function applyFontSize() {
+    messagesDiv.style.fontSize = `${currentFontSizeScale}em`;
+  }
+
   sendButton.addEventListener('click', function() {
     const question = userInput.value;
     if (question.trim() === '') {
