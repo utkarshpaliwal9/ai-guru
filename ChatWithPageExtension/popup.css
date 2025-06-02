@@ -223,6 +223,21 @@ body {
   font-weight: 500;
 }
 
+.custom-agent-message {
+  background-color: #e8f5e8;
+  color: #2d5a2d;
+  align-self: flex-start;
+  border-bottom-left-radius: 5px;
+  border-left: 4px solid #28a745;
+  font-weight: 500;
+}
+
+.custom-agent-message .agent-prefix {
+  color: #28a745;
+  font-weight: bold;
+  font-size: 0.9em;
+}
+
 .system-message {
   background-color: #fff3cd;
   color: #856404;
@@ -230,6 +245,13 @@ body {
   border: 1px solid #ffeaa7;
   font-style: italic;
   font-size: 0.9em;
+}
+
+.routing-message {
+  background-color: #f0f8ff;
+  color: #1e6091;
+  border: 1px solid #b6d7ff;
+  font-size: 0.85em;
 }
 
 .error-message {

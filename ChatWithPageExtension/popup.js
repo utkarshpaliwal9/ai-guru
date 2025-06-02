@@ -408,13 +408,32 @@ document.addEventListener('DOMContentLoaded', function() {
     updateInputPlaceholder();
   });
 
+  // Update placeholder when agent mode changes or when @ is typed
   function updateInputPlaceholder() {
     if (agentModeCheckbox.checked) {
       userInput.placeholder = "Ask me to modify the page...";
     } else {
-      userInput.placeholder = "Ask a question...";
+      userInput.placeholder = "Ask a question or use @agentName...";
     }
   }
+
+  // Add input event listener to help with agent suggestions
+  userInput.addEventListener('input', function(event) {
+    const value = userInput.value;
+    
+    // Simple feedback when user types @
+    if (value.endsWith('@')) {
+      // Load agents and show available ones
+      chrome.storage.local.get(['agents'], function(result) {
+        const agents = result.agents || [];
+        if (agents.length > 0) {
+          const agentNames = agents.map(agent => agent.name).join(', ');
+          console.log('Available agents:', agentNames);
+          // You could show a tooltip or dropdown here in a future enhancement
+        }
+      });
+    }
+  });
 
   sendButton.addEventListener('click', function() {
     const question = userInput.value;
@@ -422,25 +441,49 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    // Capture the current tab ID when sending the message
-    const sendingTabId = activeTabId;
+    // Parse for @agent syntax
+    const agentMatch = question.match(/^@(\w+)\s+(.*)/);
+    let targetAgent = null;
+    let actualQuestion = question;
     
-    // Display user's question
-    displayMessage('User', question);
+    if (agentMatch) {
+      targetAgent = agentMatch[1];
+      actualQuestion = agentMatch[2];
+      
+      // Display user's question with agent highlight
+      displayMessage('User', question);
+      
+      // Show which agent is being addressed
+      displayMessage('System', `[AI] Routing to agent: @${targetAgent}`, false);
+    } else {
+      // Display user's question normally
+      displayMessage('User', question);
+    }
+    
     userInput.value = '';
 
-    // Show processing message based on agent mode
-    const processingMessage = agentModeCheckbox.checked ? 
-                            'Processing agent request...' : 
-                            'Analyzing page content and images...';
+    // Capture the current tab ID when sending the message
+    const sendingTabId = activeTabId;
+
+    // Show processing message based on agent mode or target agent
+    let processingMessage;
+    if (targetAgent) {
+      processingMessage = `Processing request for @${targetAgent}...`;
+    } else if (agentModeCheckbox.checked) {
+      processingMessage = 'Processing agent request...';
+    } else {
+      processingMessage = 'Analyzing page content and images...';
+    }
     
     // Store reference to the processing message element for reliable removal
     const processingMessageElement = displayMessage('System', processingMessage, false); // Don't save system messages to history
 
-    // Send the question to the background script with agent mode preference
+    // Send the question to the background script with agent info
     chrome.runtime.sendMessage({ 
       type: 'ASK_QUESTION', 
-      question: question, 
+      question: actualQuestion,
+      originalQuestion: question,
+      targetAgent: targetAgent,
       agentMode: agentModeCheckbox.checked 
     }, function(response) {
       // Check if we're still on the same tab that sent the message
@@ -451,11 +494,11 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       // We're still on the same tab - handle response normally
-      handleResponseForCurrentTab(response, processingMessage, processingMessageElement);
+      handleResponseForCurrentTab(response, processingMessage, processingMessageElement, targetAgent);
     });
   });
 
-  function handleResponseForCurrentTab(response, processingMessage, processingMessageElement) {
+  function handleResponseForCurrentTab(response, processingMessage, processingMessageElement, targetAgent) {
     // Remove the processing message using the stored reference
     if (processingMessageElement && processingMessageElement.parentNode) {
       processingMessageElement.parentNode.removeChild(processingMessageElement);
@@ -471,7 +514,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (response && response.answer) {
-      if (response.isModification) {
+      if (targetAgent) {
+        // Response from a specific agent
+        displayMessage('Agent', `@${targetAgent}: ${response.answer}`);
+      } else if (response.isModification) {
         displayMessage('Agent', response.answer);
       } else {
         displayMessage('Bot', response.answer);
@@ -504,8 +550,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (tabData[tabId].messages && tabData[tabId].messages.length > 0) {
       const lastMessage = tabData[tabId].messages[tabData[tabId].messages.length - 1];
       if (lastMessage && lastMessage.sender === 'System' && 
-          (lastMessage.text === 'Analyzing page content and images...' || 
-           lastMessage.text === 'Processing agent request...')) {
+          (lastMessage.text.includes('Analyzing page content') || 
+           lastMessage.text.includes('Processing agent request') ||
+           lastMessage.text.includes('Processing request for @'))) {
         tabData[tabId].messages.pop(); // Remove the processing message
       }
     }
@@ -517,7 +564,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     if (response && response.answer) {
-      if (response.isModification) {
+      if (response.targetAgent) {
+        // Response from a specific agent
+        addMessageToTabHistory(tabId, 'Agent', `@${response.targetAgent}: ${response.answer}`);
+      } else if (response.isModification) {
         addMessageToTabHistory(tabId, 'Agent', response.answer);
       } else {
         addMessageToTabHistory(tabId, 'Bot', response.answer);
@@ -567,11 +617,29 @@ document.addEventListener('DOMContentLoaded', function() {
         messageElement.innerHTML = parseMarkdown(message);
       }
     } else if (sender === 'Agent') {
-      messageElement.classList.add('agent-message');
-      // Parse markdown for agent messages too
-      messageElement.innerHTML = parseMarkdown(message);
+      // Check if this is a custom agent response (contains @agentName prefix)
+      if (message.startsWith('@')) {
+        messageElement.classList.add('custom-agent-message');
+        // Parse the agent name and response
+        const colonIndex = message.indexOf(':');
+        if (colonIndex > 0) {
+          const agentName = message.substring(0, colonIndex);
+          const agentResponse = message.substring(colonIndex + 1).trim();
+          messageElement.innerHTML = `<span class="agent-prefix">${agentName}</span>: ${parseMarkdown(agentResponse)}`;
+        } else {
+          messageElement.innerHTML = parseMarkdown(message);
+        }
+      } else {
+        // Regular agent message (modification mode)
+        messageElement.classList.add('agent-message');
+        messageElement.innerHTML = parseMarkdown(message);
+      }
     } else if (sender === 'System') {
       messageElement.classList.add('system-message');
+      // Check if this is a routing message
+      if (message.includes('[AI] Routing to agent:')) {
+        messageElement.classList.add('routing-message');
+      }
       messageElement.textContent = message; // Keep system messages as plain text
     }
 
@@ -624,4 +692,4 @@ document.addEventListener('DOMContentLoaded', function() {
     
     return html;
   }
-}); 
+});

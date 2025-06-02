@@ -1,6 +1,8 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'ASK_QUESTION') {
     console.log('Background: Received question:', request.question);
+    console.log('Background: Original question:', request.originalQuestion);
+    console.log('Background: Target agent:', request.targetAgent);
     console.log('Background: Agent mode:', request.agentMode);
 
     // Get the current active tab
@@ -65,47 +67,52 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               }
             }
             
-            // --- Alfa API Integration Start ---
-            const pageContent = response.content;
-            const pageImages = response.images || [];
-            const userQuestion = request.question;
-            const isAgentMode = request.agentMode || false;
+            // Check if a specific agent was targeted
+            if (request.targetAgent) {
+              await handleCustomAgentRequest(request, response, sendResponse);
+            } else {
+              // --- Alfa API Integration Start ---
+              const pageContent = response.content;
+              const pageImages = response.images || [];
+              const userQuestion = request.question;
+              const isAgentMode = request.agentMode || false;
 
-            // Alfa API Configuration
-            const API_HOST = "https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1" // "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
-            const CHAT_HOST = "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io";
-            
-            // Load credentials from storage
-            chrome.storage.local.get(['alfaAuthToken', 'alfaProjectId'], async function(credentials) {
-              if (!credentials.alfaAuthToken || !credentials.alfaProjectId) {
-                console.error("Background: Alfa credentials not found");
-                sendResponse({ 
-                  answer: "Please configure your Alfa API credentials in the extension options. Right-click the extension icon and select 'Options'." 
-                });
-                return;
-              }
-
-              const AUTH_TOKEN = credentials.alfaAuthToken;
-              const PROJECT_ID = credentials.alfaProjectId;
-
-              try {
-                console.log("Background: Sending content and question to Alfa API.");
-                console.log("Background: Agent mode enabled:", isAgentMode);
-                
-                if (isAgentMode) {
-                  // Handle agent request (modification mode)
-                  await handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
-                } else {
-                  // Handle regular question
-                  await handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
+              // Alfa API Configuration
+              const API_HOST = "https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1" // "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
+              const CHAT_HOST = "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io";
+              
+              // Load credentials from storage
+              chrome.storage.local.get(['alfaAuthToken', 'alfaProjectId'], async function(credentials) {
+                if (!credentials.alfaAuthToken || !credentials.alfaProjectId) {
+                  console.error("Background: Alfa credentials not found");
+                  sendResponse({ 
+                    answer: "Please configure your Alfa API credentials in the extension options. Right-click the extension icon and select 'Options'." 
+                  });
+                  return;
                 }
 
-              } catch (error) {
-                console.error("Background: Failed to call Alfa API or process its response:", error);
-                sendResponse({ answer: "Sorry, I encountered an error trying to get an answer from Alfa. Check the console for details." });
-              }
-            });
-            // --- Alfa API Integration End ---
+                const AUTH_TOKEN = credentials.alfaAuthToken;
+                const PROJECT_ID = credentials.alfaProjectId;
+
+                try {
+                  console.log("Background: Sending content and question to Alfa API.");
+                  console.log("Background: Agent mode enabled:", isAgentMode);
+                  
+                  if (isAgentMode) {
+                    // Handle agent request (modification mode)
+                    await handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
+                  } else {
+                    // Handle regular question
+                    await handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
+                  }
+
+                } catch (error) {
+                  console.error("Background: Failed to call Alfa API or process its response:", error);
+                  sendResponse({ answer: "Sorry, I encountered an error trying to get an answer from Alfa. Check the console for details." });
+                }
+              });
+              // --- Alfa API Integration End ---
+            }
 
           } else {
             console.warn("Background: No content received from content script or unexpected response format.");
@@ -117,6 +124,132 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return true; // Indicates that the response will be sent asynchronously
   }
 });
+
+// Handle requests to specific custom agents
+async function handleCustomAgentRequest(request, pageResponse, sendResponse) {
+  console.log("Background: Processing request for agent:", request.targetAgent);
+  
+  // Load agents from storage
+  chrome.storage.local.get(['agents'], async function(result) {
+    const agents = result.agents || [];
+    const targetAgent = agents.find(agent => agent.name.toLowerCase() === request.targetAgent.toLowerCase());
+    
+    if (!targetAgent) {
+      sendResponse({ 
+        answer: `Agent "@${request.targetAgent}" not found. Please check the agent name or add it in the extension options.`,
+        targetAgent: request.targetAgent
+      });
+      return;
+    }
+    
+    console.log(`Background: Found agent ${targetAgent.name} with endpoint ${targetAgent.endpoint}`);
+    
+    // Prepare prompt for the agent
+    const prompt = `You are an AI agent named "${targetAgent.name}". 
+
+User Request: "${request.question}"
+
+Webpage Content:
+${pageResponse.content.substring(0, 2000)}...
+
+Please help the user with their request based on the webpage content and your capabilities.`;
+
+    try {
+      const apiResponse = await fetch(targetAgent.endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${targetAgent.apiKey}`,
+          // Add any custom headers from extra fields
+          ...getCustomHeaders(targetAgent.extraFields)
+        },
+        body: JSON.stringify({
+          model: targetAgent.extraFields?.model || "gpt-4o-mini", // Use custom model if specified
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI agent named "${targetAgent.name}". Help users with their requests based on webpage content and your specialized capabilities.`
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          max_tokens: parseInt(targetAgent.extraFields?.max_tokens) || 500,
+          temperature: parseFloat(targetAgent.extraFields?.temperature) || 0.7,
+          // Include any other extra fields that are not headers
+          ...getApiParameters(targetAgent.extraFields)
+        })
+      });
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.text();
+        console.error("Background: Agent API Error:", apiResponse.status, errorData);
+        sendResponse({ 
+          answer: `Error communicating with agent @${targetAgent.name}: ${apiResponse.status} ${errorData}`,
+          targetAgent: request.targetAgent
+        });
+        return;
+      }
+
+      const result = await apiResponse.json();
+      console.log("Background: Received result from agent:", result);
+      
+      const answer = result.choices?.[0]?.message?.content || result.choices?.[0]?.text || "No response from agent.";
+      
+      sendResponse({ 
+        answer: answer.trim(),
+        targetAgent: request.targetAgent
+      });
+
+    } catch (error) {
+      console.error("Error communicating with agent:", error);
+      sendResponse({ 
+        answer: `Sorry, I encountered an error trying to communicate with agent @${targetAgent.name}: ${error.message}`,
+        targetAgent: request.targetAgent
+      });
+    }
+  });
+}
+
+// Helper function to extract custom headers from extra fields
+function getCustomHeaders(extraFields) {
+  const headers = {};
+  if (extraFields) {
+    Object.entries(extraFields).forEach(([key, value]) => {
+      // Headers typically start with 'header_' prefix or contain 'header' in the key
+      if (key.toLowerCase().includes('header') || key.startsWith('x-')) {
+        headers[key.replace('header_', '')] = value;
+      }
+    });
+  }
+  return headers;
+}
+
+// Helper function to extract API parameters from extra fields (excluding headers and known params)
+function getApiParameters(extraFields) {
+  const params = {};
+  const knownParams = ['model', 'max_tokens', 'temperature'];
+  const excludeKeys = ['header_', 'x-'];
+  
+  if (extraFields) {
+    Object.entries(extraFields).forEach(([key, value]) => {
+      const lowerKey = key.toLowerCase();
+      const isHeader = excludeKeys.some(prefix => lowerKey.includes('header') || lowerKey.startsWith(prefix));
+      const isKnownParam = knownParams.includes(lowerKey);
+      
+      if (!isHeader && !isKnownParam) {
+        // Try to parse numeric values
+        let parsedValue = value;
+        if (!isNaN(value) && value !== '') {
+          parsedValue = value.includes('.') ? parseFloat(value) : parseInt(value);
+        }
+        params[key] = parsedValue;
+      }
+    });
+  }
+  return params;
+}
 
 // Handle agent requests (when user has agent mode enabled)
 async function handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId) {
