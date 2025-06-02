@@ -41,8 +41,32 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
           if (response && response.content) {
             console.log("Background: Received content snippet from content script:", response.content.substring(0, 100) + "...");
             
+            // Check if images were also extracted
+            const hasImages = response.images && response.images.length > 0;
+            console.log(`Background: Found ${response.totalImagesFound || 0} total images on page`);
+            console.log(`Background: Processed ${response.totalImagesProcessed || 0} images`);
+            console.log(`Background: CORS blocked ${response.corsBlockedImages || 0} images`);
+            
+            if (hasImages) {
+              console.log(`Background: Successfully processed ${response.images.length} images from content script`);
+              console.log('Background: Image details:', response.images.map(img => ({ 
+                src: img.src.substring(0, 50) + '...', 
+                alt: img.alt,
+                base64Length: img.base64.length 
+              })));
+            } else {
+              console.log("Background: No images were successfully processed");
+              if (response.error) {
+                console.log("Background: Image processing error:", response.error);
+              }
+              if (response.corsBlockedImages > 0) {
+                console.log(`Background: ${response.corsBlockedImages} images were blocked by CORS policy`);
+              }
+            }
+            
             // --- Alfa API Integration Start ---
             const pageContent = response.content;
+            const pageImages = response.images || [];
             const userQuestion = request.question;
 
             // Alfa API Configuration
@@ -65,19 +89,84 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               try {
                 console.log("Background: Sending content and question to Alfa API.");
                 
-                // Create a comprehensive prompt combining page content and user question
-                const prompt = `Based on the following webpage content, please answer the user's question.
+                // Create a comprehensive prompt combining page content, images, and user question
+                let prompt = `Based on the following webpage content, please answer the user's question.
 
 Webpage Content:
 ${pageContent}
 
+IMAGE INFORMATION:
+- Total images found on this webpage: ${response.totalImagesFound || 0}
+- Images I was able to process and analyze: ${pageImages.length}`;
+
+                if (response.corsBlockedImages > 0) {
+                  prompt += `
+- Images blocked by browser security (CORS): ${response.corsBlockedImages}
+- Note: Many images on this page are hosted on different domains and cannot be processed due to browser security restrictions.`;
+                }
+
+                if (hasImages) {
+                  prompt += `
+
+I have successfully processed and included ${pageImages.length} image(s) for your analysis. Each image is provided below.`;
+                } else if (response.totalImagesFound > 0) {
+                  prompt += `
+
+Unfortunately, while ${response.totalImagesFound} images exist on this page, none could be processed for analysis due to browser security restrictions (CORS policy). I can only count them but cannot see their content.`;
+                } else {
+                  prompt += `
+
+This webpage appears to contain no images.`;
+                }
+
+                prompt += `
+
 User's Question: ${userQuestion}
 
-Please provide a helpful and accurate answer based on the content above.`;
+Please provide a helpful and accurate answer. When discussing images, please reference the actual counts provided above.`;
                 
-                console.log("Background: Prompt being sent:", prompt.substring(0, 300) + "...");
+                console.log("Background: Prompt being sent:", prompt.substring(0, 500) + "...");
+                console.log(`Background: Sending ${hasImages ? pageImages.length : 0} images to API`);
 
-                // Try using chat completions endpoint (more standard)
+                // Prepare the messages array for the chat API
+                const messages = [
+                  {
+                    role: "system",
+                    content: `You are a helpful assistant that analyzes webpage content including both text and images. You have vision capabilities and can see and understand images when they are provided. 
+
+When images are included:
+- Describe what you see in the images
+- Extract text from images if present  
+- Answer questions about image content
+- Reference specific details from the images
+
+When asked about the number of images, always refer to the specific counts mentioned in the user's prompt about total images found and processed images.`
+                  },
+                  {
+                    role: "user",
+                    content: [
+                      {
+                        type: "text",
+                        text: prompt
+                      }
+                    ]
+                  }
+                ];
+
+                // Add images to the user message if available
+                if (hasImages) {
+                  pageImages.forEach((image, index) => {
+                    messages[1].content.push({
+                      type: "image_url",
+                      image_url: {
+                        url: image.base64,
+                        detail: "low" // Use "low" for faster processing, "high" for more detail
+                      }
+                    });
+                  });
+                }
+
+                // Try using chat completions endpoint with vision model
                 const apiResponse = await fetch(`${API_HOST}/chat/completions`, {
                   method: "POST",
                   headers: {
@@ -86,17 +175,8 @@ Please provide a helpful and accurate answer based on the content above.`;
                     "x-claim": PROJECT_ID
                   },
                   body: JSON.stringify({
-                    model: "gpt-4o-mini", // or whatever model Alfa supports
-                    messages: [
-                      {
-                        role: "system",
-                        content: "You are a helpful assistant that answers questions based on webpage content."
-                      },
-                      {
-                        role: "user", 
-                        content: prompt
-                      }
-                    ],
+                    model: hasImages ? "gpt-4o-mini" : "gpt-4o-mini", // Use vision-capable model for images
+                    messages: messages,
                     max_tokens: 500,
                     temperature: 0.7
                   })
@@ -110,7 +190,7 @@ Please provide a helpful and accurate answer based on the content above.`;
                   if (apiResponse.status === 404) {
                     console.log("Background: Trying alternative endpoint...");
                     
-                    // Try the simpler completions endpoint
+                    // Try the simpler completions endpoint (but this might not support images)
                     const altResponse = await fetch(`${API_HOST}/completions`, {
                       method: "POST",
                       headers: {

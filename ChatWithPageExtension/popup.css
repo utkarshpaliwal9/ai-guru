@@ -57,6 +57,15 @@ body {
   border-bottom-left-radius: 5px;
 }
 
+.system-message {
+  background-color: #fff3cd;
+  color: #856404;
+  align-self: center;
+  border: 1px solid #ffeaa7;
+  font-style: italic;
+  font-size: 0.9em;
+}
+
 .error-message {
   background-color: #ffebee;
   color: #c62828;

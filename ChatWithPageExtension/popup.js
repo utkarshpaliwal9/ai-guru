@@ -133,8 +133,18 @@ document.addEventListener('DOMContentLoaded', function() {
     displayMessage('User', question);
     userInput.value = '';
 
+    // Show processing message
+    displayMessage('System', 'Analyzing page content and images...');
+
     // Send the question to the background script
     chrome.runtime.sendMessage({ type: 'ASK_QUESTION', question: question }, function(response) {
+      // Remove the processing message
+      const messages = messagesDiv.children;
+      const lastMessage = messages[messages.length - 1];
+      if (lastMessage && lastMessage.textContent === 'Analyzing page content and images...') {
+        messagesDiv.removeChild(lastMessage);
+      }
+
       if (chrome.runtime.lastError) {
         console.error(chrome.runtime.lastError.message);
         displayMessage('Error', 'Could not get a response from the background script.');
@@ -164,6 +174,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (sender === 'Error') {
         messageElement.classList.add('error-message'); // Specific class for errors
       }
+    } else if (sender === 'System') {
+      messageElement.classList.add('system-message');
     }
 
     messageElement.textContent = message; // New line - directly sets the message text
