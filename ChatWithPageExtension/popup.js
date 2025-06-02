@@ -434,7 +434,8 @@ document.addEventListener('DOMContentLoaded', function() {
                             'Processing agent request...' : 
                             'Analyzing page content and images...';
     
-    displayMessage('System', processingMessage, false); // Don't save system messages to history
+    // Store reference to the processing message element for reliable removal
+    const processingMessageElement = displayMessage('System', processingMessage, false); // Don't save system messages to history
 
     // Send the question to the background script with agent mode preference
     chrome.runtime.sendMessage({ 
@@ -450,17 +451,17 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       // We're still on the same tab - handle response normally
-      handleResponseForCurrentTab(response, processingMessage);
+      handleResponseForCurrentTab(response, processingMessage, processingMessageElement);
     });
   });
 
-  function handleResponseForCurrentTab(response, processingMessage) {
-    // Remove the processing message
-    const messages = messagesDiv.children;
-    const lastMessage = messages[messages.length - 1];
-    if (lastMessage && (lastMessage.textContent === 'Analyzing page content and images...' || 
-                       lastMessage.text === 'Processing agent request...')) {
-      messagesDiv.removeChild(lastMessage);
+  function handleResponseForCurrentTab(response, processingMessage, processingMessageElement) {
+    // Remove the processing message using the stored reference
+    if (processingMessageElement && processingMessageElement.parentNode) {
+      processingMessageElement.parentNode.removeChild(processingMessageElement);
+    } else {
+      // Fallback: try to find and remove the processing message
+      removeProcessingMessageFromUI(processingMessage);
     }
 
     if (chrome.runtime.lastError) {
@@ -477,6 +478,19 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     } else {
       displayMessage('Bot', 'Sorry, I could not get an answer.');
+    }
+  }
+
+  function removeProcessingMessageFromUI(processingMessage) {
+    // Try to find and remove the processing message from the UI
+    const messages = messagesDiv.children;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i];
+      if (message.classList.contains('system-message') && 
+          message.textContent === processingMessage) {
+        messagesDiv.removeChild(message);
+        break;
+      }
     }
   }
 
@@ -567,6 +581,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (saveToHistory) {
       saveMessageToHistory(sender, message);
     }
+    
+    // Return the message element so it can be referenced later
+    return messageElement;
   }
 
   function parseMarkdown(text) {
