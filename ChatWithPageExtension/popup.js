@@ -31,7 +31,8 @@ document.addEventListener('DOMContentLoaded', function() {
   function initializeTabData() {
     tabData[activeTabId] = {
       messages: [],
-      agentMode: false
+      agentMode: false,
+      name: 'Chat 1'
     };
   }
 
@@ -67,8 +68,42 @@ document.addEventListener('DOMContentLoaded', function() {
   function rebuildTabsUI() {
     tabsList.innerHTML = '';
     
+    // Get tab IDs in order and recreate tabs with their stored names
     Object.keys(tabData).forEach(tabId => {
-      createTabElement(parseInt(tabId));
+      const tab = document.createElement('div');
+      tab.className = 'tab';
+      tab.dataset.tabId = tabId;
+      
+      const title = document.createElement('span');
+      title.className = 'tab-title';
+      // Use stored name or generate based on original creation order
+      title.textContent = tabData[tabId].name || `Chat ${tabId}`;
+      
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'tab-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.title = 'Close tab';
+      
+      tab.appendChild(title);
+      
+      // Only add close button if there's more than one tab
+      if (Object.keys(tabData).length > 1) {
+        tab.appendChild(closeBtn);
+      }
+      
+      tabsList.appendChild(tab);
+      
+      // Add event listeners
+      tab.addEventListener('click', (e) => {
+        if (e.target !== closeBtn) {
+          switchToTab(parseInt(tabId));
+        }
+      });
+      
+      closeBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeTab(parseInt(tabId));
+      });
     });
     
     // Set active tab
@@ -82,7 +117,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     const title = document.createElement('span');
     title.className = 'tab-title';
-    title.textContent = `Chat ${tabId}`;
+    // Calculate tab number based on current number of open tabs at creation time
+    const currentTabCount = Object.keys(tabData).length;
+    title.textContent = `Chat ${currentTabCount}`;
     
     const closeBtn = document.createElement('button');
     closeBtn.className = 'tab-close';
@@ -139,11 +176,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function createNewTab() {
     const newTabId = nextTabId++;
+    const currentTabCount = Object.keys(tabData).length + 1; // +1 for the new tab being created
     
-    // Initialize new tab data
+    // Initialize new tab data with its name
     tabData[newTabId] = {
       messages: [],
-      agentMode: false
+      agentMode: false,
+      name: `Chat ${currentTabCount}`
     };
     
     // Create new tab element
@@ -420,7 +459,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const messages = messagesDiv.children;
     const lastMessage = messages[messages.length - 1];
     if (lastMessage && (lastMessage.textContent === 'Analyzing page content and images...' || 
-                       lastMessage.textContent === 'Processing agent request...')) {
+                       lastMessage.text === 'Processing agent request...')) {
       messagesDiv.removeChild(lastMessage);
     }
 
