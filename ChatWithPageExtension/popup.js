@@ -22,8 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log(`Max popup size: ${MAX_WIDTH}x${MAX_HEIGHT}`);
 
-  // Load saved font size, popup size, and agent mode preference
-  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight', 'agentMode'], function(result) {
+  // Load saved preferences and conversation history
+  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight', 'agentMode', 'conversationHistory'], function(result) {
     if (result.fontSizeScale) {
       currentFontSizeScale = result.fontSizeScale;
       applyFontSize();
@@ -37,6 +37,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Set agent mode checkbox
     agentModeCheckbox.checked = result.agentMode || false;
     updateInputPlaceholder();
+    
+    // Load conversation history
+    if (result.conversationHistory && Array.isArray(result.conversationHistory)) {
+      result.conversationHistory.forEach(message => {
+        displayMessage(message.sender, message.text, false); // false = don't save to storage again
+      });
+    }
   });
 
   function applyFontSize() {
@@ -82,6 +89,39 @@ document.addEventListener('DOMContentLoaded', function() {
       popupHeight: height
     });
   }
+
+  function saveMessageToHistory(sender, text) {
+    chrome.storage.local.get(['conversationHistory'], function(result) {
+      const history = result.conversationHistory || [];
+      history.push({ sender, text, timestamp: Date.now() });
+      
+      // Keep only the last 50 messages to avoid storage bloat
+      const trimmedHistory = history.slice(-50);
+      
+      chrome.storage.local.set({ conversationHistory: trimmedHistory }, function() {
+        console.log('Message saved to conversation history');
+      });
+    });
+  }
+
+  function clearConversationHistory() {
+    chrome.storage.local.remove('conversationHistory', function() {
+      messagesDiv.innerHTML = '';
+      console.log('Conversation history cleared');
+    });
+  }
+
+  // Add clear conversation button (we can add this to UI later)
+  function addClearButton() {
+    const clearButton = document.createElement('button');
+    clearButton.textContent = 'Clear Chat';
+    clearButton.className = 'clear-chat-btn';
+    clearButton.addEventListener('click', clearConversationHistory);
+    document.querySelector('.controls').appendChild(clearButton);
+  }
+
+  // Add the clear button
+  addClearButton();
 
   // Resize functionality - adapted for bottom-left corner
   resizeGrip.addEventListener('mousedown', function(e) {
@@ -159,7 +199,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             'Processing agent request...' : 
                             'Analyzing page content and images...';
     
-    displayMessage('System', processingMessage);
+    displayMessage('System', processingMessage, false); // Don't save system messages to history
 
     // Send the question to the background script with agent mode preference
     chrome.runtime.sendMessage({ 
@@ -198,7 +238,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
 
-  function displayMessage(sender, message) {
+  function displayMessage(sender, message, saveToHistory = true) {
     const messageElement = document.createElement('div');
     messageElement.classList.add('message'); // Add a general message class
     if (sender === 'User') {
@@ -224,6 +264,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
     messagesDiv.appendChild(messageElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+
+    if (saveToHistory) {
+      saveMessageToHistory(sender, message);
+    }
   }
 
   function parseMarkdown(text) {

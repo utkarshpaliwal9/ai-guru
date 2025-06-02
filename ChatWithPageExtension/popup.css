@@ -28,6 +28,26 @@ body {
   padding: 12px 15px;
   background-color: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
+  position: relative;
+}
+
+.clear-chat-btn {
+  position: absolute;
+  top: 12px;
+  right: 15px;
+  padding: 4px 8px;
+  font-size: 0.8em;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  z-index: 1001;
+  transition: background-color 0.2s ease;
+}
+
+.clear-chat-btn:hover {
+  background: #c82333;
 }
 
 .agent-toggle {
