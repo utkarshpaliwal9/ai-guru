@@ -46,7 +46,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const userQuestion = request.question;
 
             // Alfa API Configuration
-            const API_HOST = "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
+            const API_HOST = "https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1" // "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
             const CHAT_HOST = "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io";
             
             // TODO: Replace these with your actual values
@@ -57,13 +57,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             try {
               console.log("Background: Sending content and question to Alfa API.");
               
-              // Create a combined context from page content and user question
-              const combinedQuery = `Context: ${pageContent}\n\nQuestion: ${userQuestion}`;
-              
-              console.log("Background: Combined query being sent:", combinedQuery.substring(0, 200) + "...");
+              // Create a comprehensive prompt combining page content and user question
+              const prompt = `Based on the following webpage content, please answer the user's question.
 
-              // Option 1: Use RAG context API (simpler for your use case)
-              const apiResponse = await fetch(`${API_HOST}/indices/rag-context`, {
+Webpage Content:
+${pageContent}
+
+User's Question: ${userQuestion}
+
+Please provide a helpful and accurate answer based on the content above.`;
+              
+              console.log("Background: Prompt being sent:", prompt.substring(0, 300) + "...");
+
+              // Try using chat completions endpoint (more standard)
+              const apiResponse = await fetch(`${API_HOST}/chat/completions`, {
                 method: "POST",
                 headers: {
                   "Content-Type": "application/json",
@@ -71,14 +78,63 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   "x-claim": PROJECT_ID
                 },
                 body: JSON.stringify({
-                  query: combinedQuery,
-                  k: 3 // Number of results to retrieve
+                  model: "gpt-4o-mini", // or whatever model Alfa supports
+                  messages: [
+                    {
+                      role: "system",
+                      content: "You are a helpful assistant that answers questions based on webpage content."
+                    },
+                    {
+                      role: "user", 
+                      content: prompt
+                    }
+                  ],
+                  max_tokens: 500,
+                  temperature: 0.7
                 })
               });
 
               if (!apiResponse.ok) {
                 const errorData = await apiResponse.text();
                 console.error("Background: Alfa API Error:", apiResponse.status, errorData);
+                
+                // If chat/completions doesn't work, let's try a different endpoint
+                if (apiResponse.status === 404) {
+                  console.log("Background: Trying alternative endpoint...");
+                  
+                  // Try the simpler completions endpoint
+                  const altResponse = await fetch(`${API_HOST}/completions`, {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      "Authorization": `Bearer ${AUTH_TOKEN}`,
+                      "x-claim": PROJECT_ID
+                    },
+                    body: JSON.stringify({
+                      model: "gpt-4o-mini",
+                      prompt: prompt,
+                      max_tokens: 500,
+                      temperature: 0.7
+                    })
+                  });
+
+                  if (!altResponse.ok) {
+                    const altErrorData = await altResponse.text();
+                    console.error("Background: Alternative endpoint also failed:", altResponse.status, altErrorData);
+                    sendResponse({ 
+                      answer: `Both API endpoints failed. Chat completions (404): ${errorData}. Completions (${altResponse.status}): ${altErrorData}. The API structure might be different than expected.` 
+                    });
+                    return;
+                  }
+
+                  const altResult = await altResponse.json();
+                  console.log("Background: Alternative endpoint result:", altResult);
+                  
+                  const answer = altResult.choices?.[0]?.text || altResult.response || "No answer found in alternative response.";
+                  sendResponse({ answer: answer.trim() });
+                  return;
+                }
+                
                 sendResponse({ answer: `Sorry, there was an error with the Alfa service (${apiResponse.status}). Error: ${errorData}` });
                 return;
               }
@@ -86,23 +142,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
               const result = await apiResponse.json();
               console.log("Background: Received result from Alfa API:", result);
               
-              // Extract answer from RAG context response
-              // The exact structure depends on Alfa's response format - you may need to adjust this
+              // Extract answer from chat completion response
               let answer = "I received a response but couldn't extract a clear answer.";
               
-              if (result.context && result.context.length > 0) {
-                // If the RAG context returns relevant information
-                answer = `Based on the page content, here's what I found: ${result.context[0].content || result.context[0].text || 'No specific answer found.'}`;
-              } else if (result.answer) {
-                answer = result.answer;
+              if (result.choices && result.choices.length > 0) {
+                answer = result.choices[0].message?.content || result.choices[0].text || "No content in choices.";
               } else if (result.response) {
                 answer = result.response;
+              } else if (result.answer) {
+                answer = result.answer;
               } else {
-                answer = `I processed your question "${userQuestion}" but couldn't find a specific answer in the page content. The API returned: ${JSON.stringify(result).substring(0, 200)}...`;
+                answer = `The API returned an unexpected format: ${JSON.stringify(result).substring(0, 200)}...`;
               }
               
               console.log("Background: Extracted answer:", answer);
-              sendResponse({ answer: answer });
+              sendResponse({ answer: answer.trim() });
 
             } catch (error) {
               console.error("Background: Failed to call Alfa API or process its response:", error);
