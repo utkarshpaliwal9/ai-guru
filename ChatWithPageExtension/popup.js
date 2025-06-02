@@ -3,6 +3,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const userInput = document.getElementById('userInput');
   const messagesDiv = document.getElementById('messages');
   const resizeGrip = document.getElementById('resizeGrip');
+  const agentModeCheckbox = document.getElementById('agentMode');
   const body = document.body;
 
   let currentFontSizeScale = 1; // Default scale
@@ -21,8 +22,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log(`Max popup size: ${MAX_WIDTH}x${MAX_HEIGHT}`);
 
-  // Load saved font size and popup size
-  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight'], function(result) {
+  // Load saved font size, popup size, and agent mode preference
+  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight', 'agentMode'], function(result) {
     if (result.fontSizeScale) {
       currentFontSizeScale = result.fontSizeScale;
       applyFontSize();
@@ -32,6 +33,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const width = result.popupWidth || DEFAULT_WIDTH;
     const height = result.popupHeight || DEFAULT_HEIGHT;
     setPopupSize(width, height);
+    
+    // Set agent mode checkbox
+    agentModeCheckbox.checked = result.agentMode || false;
+    updateInputPlaceholder();
   });
 
   function applyFontSize() {
@@ -124,6 +129,22 @@ document.addEventListener('DOMContentLoaded', function() {
     e.stopPropagation();
   });
 
+  // Save agent mode preference when checkbox changes
+  agentModeCheckbox.addEventListener('change', function() {
+    chrome.storage.local.set({ agentMode: agentModeCheckbox.checked }, function() {
+      console.log('Agent mode preference saved:', agentModeCheckbox.checked);
+    });
+    updateInputPlaceholder();
+  });
+
+  function updateInputPlaceholder() {
+    if (agentModeCheckbox.checked) {
+      userInput.placeholder = "Ask me to modify the page...";
+    } else {
+      userInput.placeholder = "Ask a question...";
+    }
+  }
+
   sendButton.addEventListener('click', function() {
     const question = userInput.value;
     if (question.trim() === '') {
@@ -133,15 +154,24 @@ document.addEventListener('DOMContentLoaded', function() {
     displayMessage('User', question);
     userInput.value = '';
 
-    // Show processing message
-    displayMessage('System', 'Analyzing page content and images...');
+    // Show processing message based on agent mode
+    const processingMessage = agentModeCheckbox.checked ? 
+                            'Processing agent request...' : 
+                            'Analyzing page content and images...';
+    
+    displayMessage('System', processingMessage);
 
-    // Send the question to the background script
-    chrome.runtime.sendMessage({ type: 'ASK_QUESTION', question: question }, function(response) {
+    // Send the question to the background script with agent mode preference
+    chrome.runtime.sendMessage({ 
+      type: 'ASK_QUESTION', 
+      question: question, 
+      agentMode: agentModeCheckbox.checked 
+    }, function(response) {
       // Remove the processing message
       const messages = messagesDiv.children;
       const lastMessage = messages[messages.length - 1];
-      if (lastMessage && lastMessage.textContent === 'Analyzing page content and images...') {
+      if (lastMessage && (lastMessage.textContent === 'Analyzing page content and images...' || 
+                         lastMessage.textContent === 'Processing agent request...')) {
         messagesDiv.removeChild(lastMessage);
       }
 
@@ -151,7 +181,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       if (response && response.answer) {
-        displayMessage('Bot', response.answer);
+        if (response.isModification) {
+          displayMessage('Agent', response.answer);
+        } else {
+          displayMessage('Bot', response.answer);
+        }
       } else {
         displayMessage('Bot', 'Sorry, I could not get an answer.');
       }
@@ -174,6 +208,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (sender === 'Error') {
         messageElement.classList.add('error-message'); // Specific class for errors
       }
+    } else if (sender === 'Agent') {
+      messageElement.classList.add('agent-message');
     } else if (sender === 'System') {
       messageElement.classList.add('system-message');
     }

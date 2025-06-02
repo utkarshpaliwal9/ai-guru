@@ -24,6 +24,40 @@ body {
   position: relative;
 }
 
+.controls {
+  padding: 12px 15px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.agent-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.agent-toggle input[type="checkbox"] {
+  margin-right: 8px;
+  transform: scale(1.1);
+}
+
+.toggle-text {
+  font-weight: 500;
+  color: #333;
+  margin-right: 5px;
+}
+
+.toggle-description {
+  color: #6c757d;
+  font-size: 0.8em;
+  font-style: italic;
+}
+
+.agent-toggle:hover .toggle-text {
+  color: #007bff;
+}
+
 #messages {
   flex-grow: 1;
   overflow-y: auto;
@@ -55,6 +89,15 @@ body {
   color: #333;
   align-self: flex-start;
   border-bottom-left-radius: 5px;
+}
+
+.agent-message {
+  background-color: #d4e8fc;
+  color: #0056b3;
+  align-self: flex-start;
+  border-bottom-left-radius: 5px;
+  border-left: 4px solid #007bff;
+  font-weight: 500;
 }
 
 .system-message {

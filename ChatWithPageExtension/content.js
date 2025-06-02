@@ -193,4 +193,112 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     
     return true; // Keep the message channel open for asynchronous response
   }
-}); 
+  
+  // Handle webpage modification requests
+  else if (request.type === 'MODIFY_PAGE') {
+    console.log('Content script: Received MODIFY_PAGE request');
+    console.log('Content script: Modification commands:', request.commands);
+    
+    try {
+      const results = executeModificationCommands(request.commands);
+      console.log('Content script: Modification results:', results);
+      
+      sendResponse({ 
+        success: true, 
+        results: results,
+        description: request.description 
+      });
+    } catch (error) {
+      console.error('Content script: Error executing modifications:', error);
+      sendResponse({ 
+        success: false, 
+        error: error.message 
+      });
+    }
+    
+    return true;
+  }
+});
+
+// Function to execute modification commands on the webpage
+function executeModificationCommands(commands) {
+  const results = [];
+  
+  commands.forEach((command, index) => {
+    try {
+      console.log(`Executing command ${index + 1}:`, command);
+      
+      const elements = document.querySelectorAll(command.selector);
+      if (elements.length === 0) {
+        results.push({
+          command: index + 1,
+          success: false,
+          error: `No elements found for selector: ${command.selector}`
+        });
+        return;
+      }
+      
+      elements.forEach(element => {
+        switch (command.action) {
+          case 'style':
+            if (command.property && command.value !== undefined) {
+              element.style[command.property] = command.value;
+              console.log(`Applied style ${command.property}: ${command.value} to element`);
+            }
+            break;
+            
+          case 'hide':
+            element.style.display = 'none';
+            console.log('Hidden element');
+            break;
+            
+          case 'show':
+            element.style.display = '';
+            console.log('Showed element');
+            break;
+            
+          case 'remove':
+            element.remove();
+            console.log('Removed element');
+            break;
+            
+          case 'replace':
+            if (command.content) {
+              element.innerHTML = command.content;
+              console.log('Replaced element content');
+            }
+            break;
+            
+          case 'add':
+            if (command.content) {
+              const newElement = document.createElement('div');
+              newElement.innerHTML = command.content;
+              element.appendChild(newElement);
+              console.log('Added new content to element');
+            }
+            break;
+            
+          default:
+            throw new Error(`Unknown action: ${command.action}`);
+        }
+      });
+      
+      results.push({
+        command: index + 1,
+        success: true,
+        elementsAffected: elements.length,
+        action: command.action
+      });
+      
+    } catch (error) {
+      console.error(`Error executing command ${index + 1}:`, error);
+      results.push({
+        command: index + 1,
+        success: false,
+        error: error.message
+      });
+    }
+  });
+  
+  return results;
+} 

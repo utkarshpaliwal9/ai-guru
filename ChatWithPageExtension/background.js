@@ -1,6 +1,7 @@
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.type === 'ASK_QUESTION') {
     console.log('Background: Received question:', request.question);
+    console.log('Background: Agent mode:', request.agentMode);
 
     // Get the current active tab
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -68,6 +69,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             const pageContent = response.content;
             const pageImages = response.images || [];
             const userQuestion = request.question;
+            const isAgentMode = request.agentMode || false;
 
             // Alfa API Configuration
             const API_HOST = "https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1" // "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
@@ -88,163 +90,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
               try {
                 console.log("Background: Sending content and question to Alfa API.");
+                console.log("Background: Agent mode enabled:", isAgentMode);
                 
-                // Create a comprehensive prompt combining page content, images, and user question
-                let prompt = `Based on the following webpage content, please answer the user's question.
-
-Webpage Content:
-${pageContent}
-
-IMAGE INFORMATION:
-- Total images found on this webpage: ${response.totalImagesFound || 0}
-- Images I was able to process and analyze: ${pageImages.length}`;
-
-                if (response.corsBlockedImages > 0) {
-                  prompt += `
-- Images blocked by browser security (CORS): ${response.corsBlockedImages}
-- Note: Many images on this page are hosted on different domains and cannot be processed due to browser security restrictions.`;
-                }
-
-                if (hasImages) {
-                  prompt += `
-
-I have successfully processed and included ${pageImages.length} image(s) for your analysis. Each image is provided below.`;
-                } else if (response.totalImagesFound > 0) {
-                  prompt += `
-
-Unfortunately, while ${response.totalImagesFound} images exist on this page, none could be processed for analysis due to browser security restrictions (CORS policy). I can only count them but cannot see their content.`;
+                if (isAgentMode) {
+                  // Handle agent request (modification mode)
+                  await handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
                 } else {
-                  prompt += `
-
-This webpage appears to contain no images.`;
+                  // Handle regular question
+                  await handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
                 }
-
-                prompt += `
-
-User's Question: ${userQuestion}
-
-Please provide a helpful and accurate answer. When discussing images, please reference the actual counts provided above.`;
-                
-                console.log("Background: Prompt being sent:", prompt.substring(0, 500) + "...");
-                console.log(`Background: Sending ${hasImages ? pageImages.length : 0} images to API`);
-
-                // Prepare the messages array for the chat API
-                const messages = [
-                  {
-                    role: "system",
-                    content: `You are a helpful assistant that analyzes webpage content including both text and images. You have vision capabilities and can see and understand images when they are provided. 
-
-When images are included:
-- Describe what you see in the images
-- Extract text from images if present  
-- Answer questions about image content
-- Reference specific details from the images
-
-When asked about the number of images, always refer to the specific counts mentioned in the user's prompt about total images found and processed images.`
-                  },
-                  {
-                    role: "user",
-                    content: [
-                      {
-                        type: "text",
-                        text: prompt
-                      }
-                    ]
-                  }
-                ];
-
-                // Add images to the user message if available
-                if (hasImages) {
-                  pageImages.forEach((image, index) => {
-                    messages[1].content.push({
-                      type: "image_url",
-                      image_url: {
-                        url: image.base64,
-                        detail: "low" // Use "low" for faster processing, "high" for more detail
-                      }
-                    });
-                  });
-                }
-
-                // Try using chat completions endpoint with vision model
-                const apiResponse = await fetch(`${API_HOST}/chat/completions`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${AUTH_TOKEN}`,
-                    "x-claim": PROJECT_ID
-                  },
-                  body: JSON.stringify({
-                    model: hasImages ? "gpt-4o-mini" : "gpt-4o-mini", // Use vision-capable model for images
-                    messages: messages,
-                    max_tokens: 500,
-                    temperature: 0.7
-                  })
-                });
-
-                if (!apiResponse.ok) {
-                  const errorData = await apiResponse.text();
-                  console.error("Background: Alfa API Error:", apiResponse.status, errorData);
-                  
-                  // If chat/completions doesn't work, let's try a different endpoint
-                  if (apiResponse.status === 404) {
-                    console.log("Background: Trying alternative endpoint...");
-                    
-                    // Try the simpler completions endpoint (but this might not support images)
-                    const altResponse = await fetch(`${API_HOST}/completions`, {
-                      method: "POST",
-                      headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${AUTH_TOKEN}`,
-                        "x-claim": PROJECT_ID
-                      },
-                      body: JSON.stringify({
-                        model: "gpt-4o-mini",
-                        prompt: prompt,
-                        max_tokens: 500,
-                        temperature: 0.7
-                      })
-                    });
-
-                    if (!altResponse.ok) {
-                      const altErrorData = await altResponse.text();
-                      console.error("Background: Alternative endpoint also failed:", altResponse.status, altErrorData);
-                      sendResponse({ 
-                        answer: `Both API endpoints failed. Chat completions (404): ${errorData}. Completions (${altResponse.status}): ${altErrorData}. The API structure might be different than expected.` 
-                      });
-                      return;
-                    }
-
-                    const altResult = await altResponse.json();
-                    console.log("Background: Alternative endpoint result:", altResult);
-                    
-                    const answer = altResult.choices?.[0]?.text || altResult.response || "No answer found in alternative response.";
-                    sendResponse({ answer: answer.trim() });
-                    return;
-                  }
-                  
-                  sendResponse({ answer: `Sorry, there was an error with the Alfa service (${apiResponse.status}). Error: ${errorData}` });
-                  return;
-                }
-
-                const result = await apiResponse.json();
-                console.log("Background: Received result from Alfa API:", result);
-                
-                // Extract answer from chat completion response
-                let answer = "I received a response but couldn't extract a clear answer.";
-                
-                if (result.choices && result.choices.length > 0) {
-                  answer = result.choices[0].message?.content || result.choices[0].text || "No content in choices.";
-                } else if (result.response) {
-                  answer = result.response;
-                } else if (result.answer) {
-                  answer = result.answer;
-                } else {
-                  answer = `The API returned an unexpected format: ${JSON.stringify(result).substring(0, 200)}...`;
-                }
-                
-                console.log("Background: Extracted answer:", answer);
-                sendResponse({ answer: answer.trim() });
 
               } catch (error) {
                 console.error("Background: Failed to call Alfa API or process its response:", error);
@@ -263,5 +117,279 @@ When asked about the number of images, always refer to the specific counts menti
     return true; // Indicates that the response will be sent asynchronously
   }
 });
+
+// Handle agent requests (when user has agent mode enabled)
+async function handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId) {
+  console.log("Background: Processing agent request");
+  
+  const prompt = `You are an AI agent that can modify webpages. Analyze the user's request and generate specific DOM modification commands.
+
+User Request: "${userQuestion}"
+
+Webpage Content:
+${pageContent.substring(0, 2000)}...
+
+Please analyze the request and respond with a JSON object containing:
+1. "type": "modification"
+2. "description": A brief description of what will be modified
+3. "commands": An array of modification commands, each containing:
+   - "action": "style", "hide", "show", "replace", "add", or "remove"
+   - "selector": CSS selector to target elements
+   - "property": CSS property name (for style actions)
+   - "value": New value or content
+   - "content": New HTML content (for add/replace actions)
+
+Example response:
+{
+  "type": "modification",
+  "description": "Changed background color to blue",
+  "commands": [
+    {
+      "action": "style",
+      "selector": "body",
+      "property": "background-color",
+      "value": "blue"
+    }
+  ]
+}
+
+IMPORTANT: Only respond with valid JSON. No other text.`;
+
+  try {
+    const apiResponse = await fetch(`https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "You are an AI agent that generates webpage modification commands. Always respond with valid JSON only."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_tokens: 800,
+        temperature: 0.3
+      })
+    });
+
+    if (!apiResponse.ok) {
+      throw new Error(`API error: ${apiResponse.status}`);
+    }
+
+    const result = await apiResponse.json();
+    const answer = result.choices[0].message?.content || "No response";
+    
+    try {
+      const modificationData = JSON.parse(answer);
+      
+      if (modificationData.type === "modification" && modificationData.commands) {
+        // Send modification commands to content script
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          chrome.tabs.sendMessage(tabs[0].id, {
+            type: "MODIFY_PAGE",
+            commands: modificationData.commands,
+            description: modificationData.description
+          }, (modifyResponse) => {
+            if (chrome.runtime.lastError) {
+              sendResponse({ answer: "Failed to execute modifications on the page." });
+            } else {
+              sendResponse({ 
+                answer: `✅ Successfully applied modifications: ${modificationData.description}`,
+                isModification: true
+              });
+            }
+          });
+        });
+      } else {
+        sendResponse({ answer: "I understand you want to modify the page, but I couldn't generate valid modification commands." });
+      }
+    } catch (parseError) {
+      console.error("Failed to parse modification JSON:", parseError);
+      sendResponse({ answer: "I couldn't understand how to modify the page based on your request. Please try a more specific request." });
+    }
+
+  } catch (error) {
+    console.error("Error in agent request:", error);
+    sendResponse({ answer: "Sorry, I encountered an error trying to process your agent request." });
+  }
+}
+
+// Handle regular questions (existing functionality)
+async function handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId) {
+  console.log("Background: Processing regular question");
+  
+  const hasImages = pageImages && pageImages.length > 0;
+  
+  // Create a comprehensive prompt combining page content, images, and user question
+  let prompt = `Based on the following webpage content, please answer the user's question.
+
+Webpage Content:
+${pageContent}
+
+IMAGE INFORMATION:
+- Total images found on this webpage: ${response.totalImagesFound || 0}
+- Images I was able to process and analyze: ${pageImages.length}`;
+
+  if (response.corsBlockedImages > 0) {
+    prompt += `
+- Images blocked by browser security (CORS): ${response.corsBlockedImages}
+- Note: Many images on this page are hosted on different domains and cannot be processed due to browser security restrictions.`;
+  }
+
+  if (hasImages) {
+    prompt += `
+
+I have successfully processed and included ${pageImages.length} image(s) for your analysis. Each image is provided below.`;
+  } else if (response.totalImagesFound > 0) {
+    prompt += `
+
+Unfortunately, while ${response.totalImagesFound} images exist on this page, none could be processed for analysis due to browser security restrictions (CORS policy). I can only count them but cannot see their content.`;
+  } else {
+    prompt += `
+
+This webpage appears to contain no images.`;
+  }
+
+  prompt += `
+
+User's Question: ${userQuestion}
+
+Please provide a helpful and accurate answer. When discussing images, please reference the actual counts provided above.`;
+  
+  console.log("Background: Prompt being sent:", prompt.substring(0, 500) + "...");
+  console.log(`Background: Sending ${hasImages ? pageImages.length : 0} images to API`);
+
+  // Prepare the messages array for the chat API
+  const messages = [
+    {
+      role: "system",
+      content: `You are a helpful assistant that analyzes webpage content including both text and images. You have vision capabilities and can see and understand images when they are provided. 
+
+When images are included:
+- Describe what you see in the images
+- Extract text from images if present  
+- Answer questions about image content
+- Reference specific details from the images
+
+When asked about the number of images, always refer to the specific counts mentioned in the user's prompt about total images found and processed images.`
+    },
+    {
+      role: "user",
+      content: [
+        {
+          type: "text",
+          text: prompt
+        }
+      ]
+    }
+  ];
+
+  // Add images to the user message if available
+  if (hasImages) {
+    pageImages.forEach((image, index) => {
+      messages[1].content.push({
+        type: "image_url",
+        image_url: {
+          url: image.base64,
+          detail: "low" // Use "low" for faster processing, "high" for more detail
+        }
+      });
+    });
+  }
+
+  try {
+    // Try using chat completions endpoint with vision model
+    const apiResponse = await fetch(`https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        model: hasImages ? "gpt-4o-mini" : "gpt-4o-mini", // Use vision-capable model for images
+        messages: messages,
+        max_tokens: 500,
+        temperature: 0.7
+      })
+    });
+
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.text();
+      console.error("Background: Alfa API Error:", apiResponse.status, errorData);
+      
+      // If chat/completions doesn't work, let's try a different endpoint
+      if (apiResponse.status === 404) {
+        console.log("Background: Trying alternative endpoint...");
+        
+        // Try the simpler completions endpoint (but this might not support images)
+        const altResponse = await fetch(`https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authToken}`,
+            "x-claim": projectId
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            prompt: prompt,
+            max_tokens: 500,
+            temperature: 0.7
+          })
+        });
+
+        if (!altResponse.ok) {
+          const altErrorData = await altResponse.text();
+          console.error("Background: Alternative endpoint also failed:", altResponse.status, altErrorData);
+          sendResponse({ 
+            answer: `Both API endpoints failed. Chat completions (404): ${errorData}. Completions (${altResponse.status}): ${altErrorData}. The API structure might be different than expected.` 
+          });
+          return;
+        }
+
+        const altResult = await altResponse.json();
+        console.log("Background: Alternative endpoint result:", altResult);
+        
+        const answer = altResult.choices?.[0]?.text || altResult.response || "No answer found in alternative response.";
+        sendResponse({ answer: answer.trim() });
+        return;
+      }
+      
+      sendResponse({ answer: `Sorry, there was an error with the Alfa service (${apiResponse.status}). Error: ${errorData}` });
+      return;
+    }
+
+    const result = await apiResponse.json();
+    console.log("Background: Received result from Alfa API:", result);
+    
+    // Extract answer from chat completion response
+    let answer = "I received a response but couldn't extract a clear answer.";
+    
+    if (result.choices && result.choices.length > 0) {
+      answer = result.choices[0].message?.content || result.choices[0].text || "No content in choices.";
+    } else if (result.response) {
+      answer = result.response;
+    } else if (result.answer) {
+      answer = result.answer;
+    } else {
+      answer = `The API returned an unexpected format: ${JSON.stringify(result).substring(0, 200)}...`;
+    }
+    
+    console.log("Background: Extracted answer:", answer);
+    sendResponse({ answer: answer.trim() });
+
+  } catch (error) {
+    console.error("Error in regular question handling:", error);
+    sendResponse({ answer: "Sorry, I encountered an error trying to get an answer from Alfa. Check the console for details." });
+  }
+}
 
 console.log('Background service worker started.'); 
