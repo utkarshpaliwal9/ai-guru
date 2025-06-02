@@ -9,6 +9,27 @@
     <h1>Extension Options</h1>
     
     <div class="setting-item">
+      <h2>Alfa API Credentials</h2>
+      <p>Enter your Alfa API credentials to enable the chat functionality.</p>
+      <div class="credentials-form">
+        <div class="input-group">
+          <label for="authToken">API Token:</label>
+          <input type="password" id="authToken" placeholder="sk-your-auth-token-here">
+          <button type="button" id="toggleAuthToken">Show</button>
+        </div>
+        <div class="input-group">
+          <label for="projectId">Project ID:</label>
+          <input type="text" id="projectId" placeholder="your-project-uuid-here">
+        </div>
+        <div class="button-group">
+          <button id="saveCredentials">Save Credentials</button>
+          <button id="clearCredentials">Clear</button>
+        </div>
+        <div id="credentialsStatus" class="status-message"></div>
+      </div>
+    </div>
+    
+    <div class="setting-item">
       <h2>Chat Font Size</h2>
       <p>Adjust the font size for the chat messages in the popup.</p>
       <div class="font-controls">
