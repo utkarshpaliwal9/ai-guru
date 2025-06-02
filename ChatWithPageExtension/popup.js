@@ -454,7 +454,7 @@ document.addEventListener('DOMContentLoaded', function() {
       displayMessage('User', question);
       
       // Show which agent is being addressed
-      displayMessage('System', `[AI] Routing to agent: @${targetAgent}`, false);
+      displayMessage('System', `${String.fromCodePoint(0x1F916)} Routing to agent: @${targetAgent}`, false);
     } else {
       // Display user's question normally
       displayMessage('User', question);
@@ -637,7 +637,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (sender === 'System') {
       messageElement.classList.add('system-message');
       // Check if this is a routing message
-      if (message.includes('[AI] Routing to agent:')) {
+      if (message.includes(`${String.fromCodePoint(0x1F916)} Routing to agent:`)) {
         messageElement.classList.add('routing-message');
       }
       messageElement.textContent = message; // Keep system messages as plain text
