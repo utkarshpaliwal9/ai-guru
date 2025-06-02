@@ -203,19 +203,65 @@ document.addEventListener('DOMContentLoaded', function() {
     messageElement.classList.add('message'); // Add a general message class
     if (sender === 'User') {
       messageElement.classList.add('user-message');
+      messageElement.textContent = message; // Keep user messages as plain text for security
     } else if (sender === 'Bot' || sender === 'Error') {
       messageElement.classList.add('bot-message');
       if (sender === 'Error') {
         messageElement.classList.add('error-message'); // Specific class for errors
+        messageElement.textContent = message; // Keep error messages as plain text
+      } else {
+        // Parse markdown for bot messages
+        messageElement.innerHTML = parseMarkdown(message);
       }
     } else if (sender === 'Agent') {
       messageElement.classList.add('agent-message');
+      // Parse markdown for agent messages too
+      messageElement.innerHTML = parseMarkdown(message);
     } else if (sender === 'System') {
       messageElement.classList.add('system-message');
+      messageElement.textContent = message; // Keep system messages as plain text
     }
 
-    messageElement.textContent = message; // New line - directly sets the message text
     messagesDiv.appendChild(messageElement);
     messagesDiv.scrollTop = messagesDiv.scrollHeight; // Scroll to the bottom
+  }
+
+  function parseMarkdown(text) {
+    // Escape HTML to prevent XSS attacks
+    let html = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+    
+    // Parse markdown formatting
+    html = html
+      // Code blocks (triple backticks)
+      .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+      // Inline code (single backticks)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      // Bold text (**text**)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      // Italic text (*text*)
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      // Numbered lists (1. item)
+      .replace(/^\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      // Bullet points (- item or * item)
+      .replace(/^[\-\*]\s+(.+)$/gm, '<li>$1</li>')
+      // Headers (# Header)
+      .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+      // Line breaks
+      .replace(/\n/g, '<br>');
+    
+    // Wrap consecutive <li> elements in <ul>
+    html = html.replace(/(<li>.*<\/li>)(\s*<br>\s*<li>.*<\/li>)*/g, (match) => {
+      const items = match.replace(/<br>\s*/g, '').replace(/\s*$/, '');
+      return '<ul>' + items + '</ul>';
+    });
+    
+    return html;
   }
 }); 
