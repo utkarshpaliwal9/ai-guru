@@ -472,7 +472,7 @@ document.addEventListener('DOMContentLoaded', function() {
     } else if (agentModeCheckbox.checked) {
       processingMessage = 'Processing agent request...';
     } else {
-      processingMessage = 'Analyzing page content and images...';
+      processingMessage = 'Uploading content to document service and analyzing...';
     }
     
     // Store reference to the processing message element for reliable removal
@@ -552,7 +552,8 @@ document.addEventListener('DOMContentLoaded', function() {
       if (lastMessage && lastMessage.sender === 'System' && 
           (lastMessage.text.includes('Analyzing page content') || 
            lastMessage.text.includes('Processing agent request') ||
-           lastMessage.text.includes('Processing request for @'))) {
+           lastMessage.text.includes('Processing request for @') ||
+           lastMessage.text.includes('Uploading content to document service'))) {
         tabData[tabId].messages.pop(); // Remove the processing message
       }
     }

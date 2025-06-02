@@ -71,14 +71,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             if (request.targetAgent) {
               await handleCustomAgentRequest(request, response, sendResponse);
             } else {
-              // --- Alfa API Integration Start ---
+              // --- Alfa Document Service Integration Start ---
               const pageContent = response.content;
               const pageImages = response.images || [];
               const userQuestion = request.question;
               const isAgentMode = request.agentMode || false;
 
               // Alfa API Configuration
-              const API_HOST = "https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1" // "https://clip-api.gamma.qa.us-west-2.aws.avalara.io";
+              const DOC_SERVICE_HOST = "https://clip-doc-service.gamma.qa.us-west-2.aws.avalara.io";
               const CHAT_HOST = "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io";
               
               // Load credentials from storage
@@ -95,15 +95,15 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 const PROJECT_ID = credentials.alfaProjectId;
 
                 try {
-                  console.log("Background: Sending content and question to Alfa API.");
+                  console.log("Background: Processing with Alfa Document Service");
                   console.log("Background: Agent mode enabled:", isAgentMode);
                   
                   if (isAgentMode) {
-                    // Handle agent request (modification mode)
+                    // Handle agent request (modification mode) - use old method for now
                     await handleAgentRequest(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
                   } else {
-                    // Handle regular question
-                    await handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
+                    // Handle regular question with document service
+                    await handleDocumentBasedQuestion(userQuestion, pageContent, pageImages, response, sendResponse, AUTH_TOKEN, PROJECT_ID);
                   }
 
                 } catch (error) {
@@ -111,7 +111,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                   sendResponse({ answer: "Sorry, I encountered an error trying to get an answer from Alfa. Check the console for details." });
                 }
               });
-              // --- Alfa API Integration End ---
+              // --- Alfa Document Service Integration End ---
             }
 
           } else {
@@ -355,7 +355,212 @@ IMPORTANT: Only respond with valid JSON. No other text.`;
   }
 }
 
-// Handle regular questions (existing functionality)
+// Handle document-based questions using Alfa Document Service
+async function handleDocumentBasedQuestion(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId) {
+  console.log("Background: Processing document-based question with Alfa Document Service");
+  
+  const DOC_SERVICE_HOST = "https://clip-doc-service.gamma.qa.us-west-2.aws.avalara.io";
+  
+  try {
+    // Create or get a session-based index ID (we'll use a simple timestamp-based approach)
+    const sessionIndexId = `webpage-session-${Date.now()}`;
+    
+    // Step 1: Create an index for this session
+    console.log("Background: Creating index for webpage content");
+    const indexResponse = await fetch(`${DOC_SERVICE_HOST}/indices`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        name: `Webpage Analysis - ${new Date().toISOString()}`,
+        description: "Temporary index for webpage content analysis"
+      })
+    });
+    
+    if (!indexResponse.ok) {
+      throw new Error(`Failed to create index: ${indexResponse.status}`);
+    }
+    
+    const indexData = await indexResponse.json();
+    const indexId = indexData.index_uuid || indexData.uuid || indexData.id;
+    console.log("Background: Created index:", indexId);
+    
+    // Step 2: Upload webpage content as a document
+    if (pageContent && pageContent.trim()) {
+      console.log("Background: Uploading webpage content");
+      const contentResponse = await fetch(`${DOC_SERVICE_HOST}/documents`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${authToken}`,
+          "x-claim": projectId
+        },
+        body: JSON.stringify({
+          index_uuid: indexId,
+          content: pageContent,
+          metadata: {
+            type: "webpage_content",
+            source: "browser_extension",
+            timestamp: new Date().toISOString()
+          },
+          tags: ["webpage", "content"]
+        })
+      });
+      
+      if (!contentResponse.ok) {
+        console.warn("Background: Failed to upload content:", contentResponse.status);
+      } else {
+        console.log("Background: Successfully uploaded webpage content");
+      }
+    }
+    
+    // Step 3: Upload images if available
+    if (pageImages && pageImages.length > 0) {
+      console.log(`Background: Uploading ${pageImages.length} images`);
+      
+      for (let i = 0; i < Math.min(pageImages.length, 5); i++) { // Limit to 5 images
+        const image = pageImages[i];
+        try {
+          // Convert base64 to blob-like format for upload
+          const base64Data = image.base64.split(',')[1]; // Remove data:image/... prefix
+          
+          const imageResponse = await fetch(`${DOC_SERVICE_HOST}/documents`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${authToken}`,
+              "x-claim": projectId
+            },
+            body: JSON.stringify({
+              index_uuid: indexId,
+              file_data: base64Data,
+              file_name: `image_${i + 1}.jpg`,
+              metadata: {
+                type: "webpage_image",
+                source: "browser_extension",
+                alt_text: image.alt || "",
+                original_src: image.src.substring(0, 100) + "...",
+                timestamp: new Date().toISOString()
+              },
+              tags: ["image", "webpage"]
+            })
+          });
+          
+          if (imageResponse.ok) {
+            console.log(`Background: Successfully uploaded image ${i + 1}`);
+          } else {
+            console.warn(`Background: Failed to upload image ${i + 1}:`, imageResponse.status);
+          }
+        } catch (imageError) {
+          console.warn(`Background: Error uploading image ${i + 1}:`, imageError);
+        }
+      }
+    }
+    
+    // Step 4: Query the context using RAG
+    console.log("Background: Querying RAG context");
+    const ragResponse = await fetch(`${DOC_SERVICE_HOST}/indices/rag-context`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        index_uuid: indexId,
+        query: userQuestion,
+        k: 10 // Number of context chunks to retrieve
+      })
+    });
+    
+    if (!ragResponse.ok) {
+      throw new Error(`Failed to get RAG context: ${ragResponse.status}`);
+    }
+    
+    const ragData = await ragResponse.json();
+    console.log("Background: Retrieved RAG context");
+    
+    // Step 5: Start a conversation with the context
+    const conversationResponse = await fetch(`${DOC_SERVICE_HOST}/conversations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        index_id: indexId,
+        config: {
+          agent: "default",
+          assistant_profile: null,
+          default_agent_config: {
+            llm: "gpt-4o-mini",
+            system_prompt: "You are a helpful assistant that analyzes webpage content and images. Use the provided context to answer questions accurately and comprehensively."
+          }
+        }
+      })
+    });
+    
+    if (!conversationResponse.ok) {
+      throw new Error(`Failed to start conversation: ${conversationResponse.status}`);
+    }
+    
+    const conversationData = await conversationResponse.json();
+    const conversationId = conversationData.conversation_uuid || conversationData.uuid || conversationData.id;
+    
+    // Step 6: Send the user's question to the conversation
+    const messageResponse = await fetch(`${DOC_SERVICE_HOST}/conversations/${conversationId}/messages`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${authToken}`,
+        "x-claim": projectId
+      },
+      body: JSON.stringify({
+        message: userQuestion,
+        context: ragData.contexts ? ragData.contexts.slice(0, 5) : [] // Include top 5 context chunks
+      })
+    });
+    
+    if (!messageResponse.ok) {
+      throw new Error(`Failed to send message: ${messageResponse.status}`);
+    }
+    
+    const messageData = await messageResponse.json();
+    const answer = messageData.response || messageData.message || messageData.content || "I received your question but couldn't generate a proper response.";
+    
+    console.log("Background: Successfully got response from document-based conversation");
+    sendResponse({ answer: answer.trim() });
+    
+    // Optional: Clean up the temporary index after some delay
+    setTimeout(async () => {
+      try {
+        await fetch(`${DOC_SERVICE_HOST}/indices/${indexId}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${authToken}`,
+            "x-claim": projectId
+          }
+        });
+        console.log("Background: Cleaned up temporary index");
+      } catch (cleanupError) {
+        console.warn("Background: Failed to cleanup index:", cleanupError);
+      }
+    }, 300000); // Clean up after 5 minutes
+    
+  } catch (error) {
+    console.error("Background: Error in document-based question handling:", error);
+    
+    // Fallback to regular question handling if document service fails
+    console.log("Background: Falling back to regular question handling");
+    await handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId);
+  }
+}
+
+// Handle regular questions (existing functionality) - keeping as fallback
 async function handleRegularQuestion(userQuestion, pageContent, pageImages, response, sendResponse, authToken, projectId) {
   console.log("Background: Processing regular question");
   
