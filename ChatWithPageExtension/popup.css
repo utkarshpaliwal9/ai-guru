@@ -238,8 +238,8 @@ body {
   position: absolute;
   bottom: 0;
   left: 0;
-  width: 16px;
-  height: 16px;
+  width: 10px;
+  height: 10px;
   background: linear-gradient(45deg, transparent 0%, transparent 30%, #bbb 30%, #bbb 40%, transparent 40%, transparent 60%, #bbb 60%, #bbb 70%, transparent 70%);
   cursor: ne-resize;
   z-index: 1000;
