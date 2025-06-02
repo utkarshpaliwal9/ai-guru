@@ -4,11 +4,16 @@ document.addEventListener('DOMContentLoaded', function() {
   const messagesDiv = document.getElementById('messages');
   const resizeGrip = document.getElementById('resizeGrip');
   const agentModeCheckbox = document.getElementById('agentMode');
+  const tabsList = document.getElementById('tabsList');
+  const newTabBtn = document.getElementById('newTabBtn');
   const body = document.body;
 
   let currentFontSizeScale = 1; // Default scale
   let isResizing = false;
   let startX, startY, startWidth, startHeight;
+  let activeTabId = 1;
+  let nextTabId = 2;
+  let tabData = {}; // Store conversations per tab
 
   // New default dimensions (smaller)
   const DEFAULT_WIDTH = 500;
@@ -22,8 +27,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
   console.log(`Max popup size: ${MAX_WIDTH}x${MAX_HEIGHT}`);
 
-  // Load saved preferences and conversation history
-  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight', 'agentMode', 'conversationHistory'], function(result) {
+  // Initialize tab data structure
+  function initializeTabData() {
+    tabData[activeTabId] = {
+      messages: [],
+      agentMode: false
+    };
+  }
+
+  // Load saved preferences and tab data
+  chrome.storage.local.get(['fontSizeScale', 'popupWidth', 'popupHeight', 'tabData', 'activeTabId', 'nextTabId'], function(result) {
     if (result.fontSizeScale) {
       currentFontSizeScale = result.fontSizeScale;
       applyFontSize();
@@ -34,17 +47,193 @@ document.addEventListener('DOMContentLoaded', function() {
     const height = result.popupHeight || DEFAULT_HEIGHT;
     setPopupSize(width, height);
     
-    // Set agent mode checkbox
-    agentModeCheckbox.checked = result.agentMode || false;
+    // Load tab data
+    if (result.tabData && Object.keys(result.tabData).length > 0) {
+      tabData = result.tabData;
+      activeTabId = result.activeTabId || 1;
+      nextTabId = result.nextTabId || 2;
+      
+      // Rebuild tabs UI
+      rebuildTabsUI();
+    } else {
+      // Initialize with default tab
+      initializeTabData();
+    }
+    
+    // Load current tab's data
+    loadCurrentTab();
+  });
+
+  function rebuildTabsUI() {
+    tabsList.innerHTML = '';
+    
+    Object.keys(tabData).forEach(tabId => {
+      createTabElement(parseInt(tabId));
+    });
+    
+    // Set active tab
+    setActiveTab(activeTabId);
+  }
+
+  function createTabElement(tabId) {
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    tab.dataset.tabId = tabId;
+    
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = `Chat ${tabId}`;
+    
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'tab-close';
+    closeBtn.innerHTML = '&times;';
+    closeBtn.title = 'Close tab';
+    
+    tab.appendChild(title);
+    
+    // Only add close button if there's more than one tab
+    if (Object.keys(tabData).length > 1) {
+      tab.appendChild(closeBtn);
+    }
+    
+    tabsList.appendChild(tab);
+    
+    // Add event listeners
+    tab.addEventListener('click', (e) => {
+      if (e.target !== closeBtn) {
+        switchToTab(tabId);
+      }
+    });
+    
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeTab(tabId);
+    });
+  }
+
+  function switchToTab(tabId) {
+    // Save current tab's state
+    saveCurrentTabState();
+    
+    // Switch active tab
+    activeTabId = tabId;
+    setActiveTab(tabId);
+    
+    // Load new tab's data
+    loadCurrentTab();
+    
+    // Save active tab ID
+    chrome.storage.local.set({ activeTabId: activeTabId });
+  }
+
+  function setActiveTab(tabId) {
+    document.querySelectorAll('.tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    const activeTab = document.querySelector(`[data-tab-id="${tabId}"]`);
+    if (activeTab) {
+      activeTab.classList.add('active');
+    }
+  }
+
+  function createNewTab() {
+    const newTabId = nextTabId++;
+    
+    // Initialize new tab data
+    tabData[newTabId] = {
+      messages: [],
+      agentMode: false
+    };
+    
+    // Create new tab element
+    createTabElement(newTabId);
+    
+    // Update close buttons visibility
+    updateCloseButtonsVisibility();
+    
+    // Switch to new tab
+    switchToTab(newTabId);
+    
+    // Save state
+    saveTabState();
+  }
+
+  function closeTab(tabId) {
+    // Don't close if it's the only tab
+    if (Object.keys(tabData).length <= 1) {
+      return;
+    }
+    
+    // Remove tab data
+    delete tabData[tabId];
+    
+    // Remove tab element
+    const tabElement = document.querySelector(`[data-tab-id="${tabId}"]`);
+    if (tabElement) {
+      tabElement.remove();
+    }
+    
+    // If closing active tab, switch to another tab
+    if (activeTabId === tabId) {
+      const remainingTabIds = Object.keys(tabData).map(id => parseInt(id));
+      activeTabId = remainingTabIds[0];
+      setActiveTab(activeTabId);
+      loadCurrentTab();
+    }
+    
+    // Update close buttons visibility
+    updateCloseButtonsVisibility();
+    
+    // Save state
+    saveTabState();
+  }
+
+  function updateCloseButtonsVisibility() {
+    const hasMultipleTabs = Object.keys(tabData).length > 1;
+    
+    document.querySelectorAll('.tab-close').forEach(closeBtn => {
+      closeBtn.style.display = hasMultipleTabs ? 'flex' : 'none';
+    });
+  }
+
+  function saveCurrentTabState() {
+    if (tabData[activeTabId]) {
+      tabData[activeTabId].agentMode = agentModeCheckbox.checked;
+      // Messages are saved in real-time, so no need to collect them here
+    }
+  }
+
+  function loadCurrentTab() {
+    if (!tabData[activeTabId]) {
+      tabData[activeTabId] = { messages: [], agentMode: false };
+    }
+    
+    const currentTab = tabData[activeTabId];
+    
+    // Set agent mode
+    agentModeCheckbox.checked = currentTab.agentMode;
     updateInputPlaceholder();
     
-    // Load conversation history
-    if (result.conversationHistory && Array.isArray(result.conversationHistory)) {
-      result.conversationHistory.forEach(message => {
+    // Load messages
+    messagesDiv.innerHTML = '';
+    if (currentTab.messages && Array.isArray(currentTab.messages)) {
+      currentTab.messages.forEach(message => {
         displayMessage(message.sender, message.text, false); // false = don't save to storage again
       });
     }
-  });
+  }
+
+  function saveTabState() {
+    chrome.storage.local.set({
+      tabData: tabData,
+      activeTabId: activeTabId,
+      nextTabId: nextTabId
+    });
+  }
+
+  // New tab button event listener
+  newTabBtn.addEventListener('click', createNewTab);
 
   function applyFontSize() {
     messagesDiv.style.fontSize = `${currentFontSizeScale}em`;
@@ -91,24 +280,26 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function saveMessageToHistory(sender, text) {
-    chrome.storage.local.get(['conversationHistory'], function(result) {
-      const history = result.conversationHistory || [];
-      history.push({ sender, text, timestamp: Date.now() });
+    if (tabData[activeTabId]) {
+      if (!tabData[activeTabId].messages) {
+        tabData[activeTabId].messages = [];
+      }
+      tabData[activeTabId].messages.push({ sender, text, timestamp: Date.now() });
       
-      // Keep only the last 50 messages to avoid storage bloat
-      const trimmedHistory = history.slice(-50);
+      // Keep only the last 50 messages per tab to avoid storage bloat
+      tabData[activeTabId].messages = tabData[activeTabId].messages.slice(-50);
       
-      chrome.storage.local.set({ conversationHistory: trimmedHistory }, function() {
-        console.log('Message saved to conversation history');
-      });
-    });
+      saveTabState();
+    }
   }
 
   function clearConversationHistory() {
-    chrome.storage.local.remove('conversationHistory', function() {
+    if (tabData[activeTabId]) {
+      tabData[activeTabId].messages = [];
       messagesDiv.innerHTML = '';
-      console.log('Conversation history cleared');
-    });
+      saveTabState();
+      console.log(`Conversation history cleared for tab ${activeTabId}`);
+    }
   }
 
   // Add clear conversation button (we can add this to UI later)
@@ -171,9 +362,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Save agent mode preference when checkbox changes
   agentModeCheckbox.addEventListener('change', function() {
-    chrome.storage.local.set({ agentMode: agentModeCheckbox.checked }, function() {
-      console.log('Agent mode preference saved:', agentModeCheckbox.checked);
-    });
+    if (tabData[activeTabId]) {
+      tabData[activeTabId].agentMode = agentModeCheckbox.checked;
+      saveTabState();
+    }
     updateInputPlaceholder();
   });
 
@@ -190,6 +382,10 @@ document.addEventListener('DOMContentLoaded', function() {
     if (question.trim() === '') {
       return;
     }
+    
+    // Capture the current tab ID when sending the message
+    const sendingTabId = activeTabId;
+    
     // Display user's question
     displayMessage('User', question);
     userInput.value = '';
@@ -207,30 +403,94 @@ document.addEventListener('DOMContentLoaded', function() {
       question: question, 
       agentMode: agentModeCheckbox.checked 
     }, function(response) {
-      // Remove the processing message
-      const messages = messagesDiv.children;
-      const lastMessage = messages[messages.length - 1];
-      if (lastMessage && (lastMessage.textContent === 'Analyzing page content and images...' || 
-                         lastMessage.textContent === 'Processing agent request...')) {
-        messagesDiv.removeChild(lastMessage);
-      }
-
-      if (chrome.runtime.lastError) {
-        console.error(chrome.runtime.lastError.message);
-        displayMessage('Error', 'Could not get a response from the background script.');
+      // Check if we're still on the same tab that sent the message
+      if (sendingTabId !== activeTabId) {
+        // We switched tabs - need to handle response for the original tab
+        handleResponseForSpecificTab(sendingTabId, response, processingMessage);
         return;
       }
-      if (response && response.answer) {
-        if (response.isModification) {
-          displayMessage('Agent', response.answer);
-        } else {
-          displayMessage('Bot', response.answer);
-        }
-      } else {
-        displayMessage('Bot', 'Sorry, I could not get an answer.');
-      }
+      
+      // We're still on the same tab - handle response normally
+      handleResponseForCurrentTab(response, processingMessage);
     });
   });
+
+  function handleResponseForCurrentTab(response, processingMessage) {
+    // Remove the processing message
+    const messages = messagesDiv.children;
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && (lastMessage.textContent === 'Analyzing page content and images...' || 
+                       lastMessage.textContent === 'Processing agent request...')) {
+      messagesDiv.removeChild(lastMessage);
+    }
+
+    if (chrome.runtime.lastError) {
+      console.error(chrome.runtime.lastError.message);
+      displayMessage('Error', 'Could not get a response from the background script.');
+      return;
+    }
+    
+    if (response && response.answer) {
+      if (response.isModification) {
+        displayMessage('Agent', response.answer);
+      } else {
+        displayMessage('Bot', response.answer);
+      }
+    } else {
+      displayMessage('Bot', 'Sorry, I could not get an answer.');
+    }
+  }
+
+  function handleResponseForSpecificTab(tabId, response, processingMessage) {
+    // Store the response in the specific tab's message history
+    if (!tabData[tabId]) {
+      return; // Tab was closed
+    }
+    
+    // Remove the processing message from that tab's history
+    if (tabData[tabId].messages && tabData[tabId].messages.length > 0) {
+      const lastMessage = tabData[tabId].messages[tabData[tabId].messages.length - 1];
+      if (lastMessage && lastMessage.sender === 'System' && 
+          (lastMessage.text === 'Analyzing page content and images...' || 
+           lastMessage.text === 'Processing agent request...')) {
+        tabData[tabId].messages.pop(); // Remove the processing message
+      }
+    }
+    
+    if (chrome.runtime.lastError) {
+      console.error(chrome.runtime.lastError.message);
+      addMessageToTabHistory(tabId, 'Error', 'Could not get a response from the background script.');
+      return;
+    }
+    
+    if (response && response.answer) {
+      if (response.isModification) {
+        addMessageToTabHistory(tabId, 'Agent', response.answer);
+      } else {
+        addMessageToTabHistory(tabId, 'Bot', response.answer);
+      }
+    } else {
+      addMessageToTabHistory(tabId, 'Bot', 'Sorry, I could not get an answer.');
+    }
+    
+    // Save the updated tab data
+    saveTabState();
+  }
+
+  function addMessageToTabHistory(tabId, sender, text) {
+    if (!tabData[tabId]) {
+      return;
+    }
+    
+    if (!tabData[tabId].messages) {
+      tabData[tabId].messages = [];
+    }
+    
+    tabData[tabId].messages.push({ sender, text, timestamp: Date.now() });
+    
+    // Keep only the last 50 messages per tab to avoid storage bloat
+    tabData[tabId].messages = tabData[tabId].messages.slice(-50);
+  }
 
   userInput.addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
