@@ -3,14 +3,14 @@ import { BaseLLMProvider } from './BaseLLMProvider.js';
 
 /**
  * Alfa LLM Provider
- * Integrates with Avalara's Alfa enterprise RAG-based AI system
+ * Integrates with Avalara's Alfa enterprise RAG-based AI system using OpenAI-compatible API
  */
 export class AlfaProvider extends BaseLLMProvider {
   constructor(config) {
     super(config);
     this.type = 'alfa';
     this.apiClient = null;
-    this.conversationId = null;
+    this.conversationHistory = [];
   }
 
   /**
@@ -21,22 +21,22 @@ export class AlfaProvider extends BaseLLMProvider {
     
     this.config = { ...this.config, ...config };
     
-    // Setup axios client with authentication
+    // Setup axios client with authentication for OpenAI-compatible API
     this.apiClient = axios.create({
-      baseURL: this.config.chatHost,
+      baseURL: this.config.chatHost.replace('/completions', ''), // Remove completions from base URL
       headers: {
         'Authorization': `Bearer ${this.config.authToken}`,
         'x-claim': this.config.projectId,
         'Content-Type': 'application/json'
       },
-      timeout: 60000 // Increased timeout for streaming
+      timeout: 30000
     });
 
     console.log(`🔧 Alfa provider initialized for project ${this.config.projectId}`);
   }
 
   /**
-   * Send message to Alfa and get response (using streaming API)
+   * Send message to Alfa using OpenAI-compatible chat completions API
    */
   async sendMessage(message, context = {}) {
     try {
@@ -44,33 +44,35 @@ export class AlfaProvider extends BaseLLMProvider {
         throw new Error('Alfa provider not initialized');
       }
 
-      // Start conversation if not exists
-      if (!this.conversationId) {
-        await this.startConversation();
-      }
+      console.log(`🤖 Sending message to Alfa using OpenAI-compatible API`);
 
-      console.log(`🤖 Sending message to Alfa conversation: ${this.conversationId}`);
+      // Prepare messages in OpenAI format
+      const messages = this.prepareMessages(message, context);
 
-      // Use the correct streaming endpoint and format from documentation
-      const response = await this.apiClient.post(
-        `/conversations/${this.conversationId}/stream`,
-        {
-          question: message, // Use 'question' instead of 'message'
-          args: {} // Add args object as per documentation
-        },
-        {
-          responseType: 'stream' // Handle streaming response
-        }
+      // Use OpenAI-compatible chat completions endpoint
+      const response = await this.apiClient.post('/completions', {
+        model: this.config.model || 'gpt-4o-mini',
+        messages: messages,
+        max_tokens: this.config.maxTokens || 500,
+        temperature: this.config.temperature || 0.7,
+        stream: false // Start with non-streaming for simplicity
+      });
+
+      // Extract response content
+      const content = response.data.choices?.[0]?.message?.content || 'No response from Alfa';
+
+      // Update conversation history
+      this.conversationHistory.push(
+        { role: 'user', content: message },
+        { role: 'assistant', content: content }
       );
 
-      // Parse streaming response
-      const fullResponse = await this.parseStreamingResponse(response);
-
       return this.standardizeResponse({
-        content: fullResponse,
+        content: content,
         metadata: {
-          conversationId: this.conversationId,
-          streamingResponse: true
+          model: response.data.model,
+          usage: response.data.usage,
+          provider: 'alfa-openai-compatible'
         }
       });
 
@@ -85,116 +87,47 @@ export class AlfaProvider extends BaseLLMProvider {
   }
 
   /**
-   * Parse streaming response from Alfa API
+   * Prepare messages in OpenAI format
    */
-  async parseStreamingResponse(response) {
-    return new Promise((resolve, reject) => {
-      let fullResponse = '';
-      let buffer = '';
+  prepareMessages(userMessage, context = {}) {
+    const messages = [];
 
-      response.data.on('data', (chunk) => {
-        buffer += chunk.toString('utf-8');
-        
-        // Process complete lines
-        const lines = buffer.split('\n');
-        buffer = lines.pop(); // Keep incomplete line in buffer
-        
-        for (const line of lines) {
-          if (line.trim().startsWith('data:')) {
-            try {
-              const jsonData = line.slice(5).trim(); // Remove 'data:' prefix
-              if (jsonData && jsonData !== '[DONE]') {
-                const parsed = JSON.parse(jsonData);
-                if (parsed.output) {
-                  fullResponse += parsed.output;
-                }
-              }
-            } catch (parseError) {
-              console.warn('❌ Failed to parse streaming chunk:', parseError.message);
-            }
-          }
-        }
-      });
-
-      response.data.on('end', () => {
-        console.log(`✅ Received complete response from Alfa (${fullResponse.length} chars)`);
-        resolve(fullResponse || 'Response received from Alfa');
-      });
-
-      response.data.on('error', (error) => {
-        console.error('❌ Streaming error:', error);
-        reject(error);
-      });
-
-      // Timeout fallback
-      setTimeout(() => {
-        if (fullResponse) {
-          resolve(fullResponse);
-        } else {
-          reject(new Error('Streaming response timeout'));
-        }
-      }, 30000);
+    // Add system message
+    const systemPrompt = this.config.systemPrompt || 
+      "You are a helpful assistant that analyzes webpage content including both text and images. You have vision capabilities and can see and understand images when they are provided.";
+    
+    messages.push({
+      role: 'system',
+      content: systemPrompt
     });
-  }
 
-  /**
-   * Start a new conversation with Alfa (updated to match documentation)
-   */
-  async startConversation() {
-    try {
-      const conversationConfig = {
-        index_id: this.config.indexId || null, // Make index_id explicit
-        config: {
-          agent: this.config.agent || 'default',
-          assistant_profile: this.config.assistantProfile || null,
-          default_agent_config: {
-            llm: this.config.model || 'gpt-4o-mini',
-            prompt_name: this.config.userPromptName || 'demo_rag_user_prompt',
-            system_prompt_name: this.config.systemPromptName || 'demo_rag_system_prompt'
-          }
+    // Add conversation history if available
+    if (context.history && Array.isArray(context.history)) {
+      context.history.slice(-10).forEach(msg => { // Keep last 10 messages
+        if (msg.type === 'user') {
+          messages.push({ role: 'user', content: msg.content });
+        } else if (msg.type === 'agent' || msg.type === 'assistant') {
+          messages.push({ role: 'assistant', content: msg.content });
         }
-      };
-
-      console.log(`🚀 Creating Alfa conversation with config:`, JSON.stringify(conversationConfig, null, 2));
-
-      const response = await this.apiClient.post('/conversations', conversationConfig);
-      
-      // Handle both possible response formats
-      this.conversationId = response.data.id || response.data.conversation_id;
-      console.log(`✅ Alfa conversation started: ${this.conversationId}`);
-      
-      if (!this.conversationId) {
-        console.error('❌ No conversation ID in response:', response.data);
-        throw new Error('Failed to get conversation ID from Alfa');
-      }
-      
-      return this.conversationId;
-    } catch (error) {
-      console.error('❌ Failed to start Alfa conversation:', error.response?.data || error.message);
-      if (error.response) {
-        console.error(`❌ Status: ${error.response.status}, Data:`, error.response.data);
-      }
-      throw error;
+      });
     }
+
+    // Add current user message
+    messages.push({
+      role: 'user',
+      content: [
+        {
+          type: 'text',
+          text: userMessage
+        }
+      ]
+    });
+
+    return messages;
   }
 
   /**
-   * Prepare context for Alfa API
-   */
-  prepareContext(context) {
-    return {
-      conversation_history: context.history?.map(msg => ({
-        role: msg.type === 'user' ? 'user' : 'assistant',
-        content: msg.content,
-        timestamp: msg.timestamp
-      })) || [],
-      metadata: context.metadata || {},
-      ...(this.config.ragEnabled && { use_rag: true })
-    };
-  }
-
-  /**
-   * Test connection to Alfa
+   * Test connection to Alfa using OpenAI-compatible API
    */
   async testConnection() {
     try {
@@ -202,22 +135,34 @@ export class AlfaProvider extends BaseLLMProvider {
         await this.initialize(this.config);
       }
 
-      // Test with a simple health check or conversation start
+      console.log(`🔗 Testing Alfa connection...`);
       const startTime = Date.now();
-      await this.startConversation();
+
+      const response = await this.apiClient.post('/completions', {
+        model: this.config.model || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You are a helpful assistant.' },
+          { role: 'user', content: 'Hello, this is a connection test. Please respond briefly.' }
+        ],
+        max_tokens: 50,
+        temperature: 0.7
+      });
+
       const latency = Date.now() - startTime;
+      const content = response.data.choices?.[0]?.message?.content;
 
       return {
         success: true,
         latency,
-        message: 'Alfa connection successful',
-        conversationId: this.conversationId,
+        message: 'Alfa OpenAI-compatible API connection successful',
+        response: content,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
       return {
         success: false,
         error: error.message,
+        details: error.response?.data,
         timestamp: new Date().toISOString()
       };
     }
@@ -230,71 +175,48 @@ export class AlfaProvider extends BaseLLMProvider {
     return {
       ...super.getCapabilities(),
       supportsRAG: true,
-      supportsToolCalls: true,
+      supportsVision: true,
+      supportsStreaming: true,
       supportsConversationHistory: true,
-      maxTokens: 8192,
-      supportedModalities: ['text'],
+      maxTokens: 4096,
+      supportedModalities: ['text', 'image'],
       customFeatures: {
-        ragIndexing: true,
-        documentUpload: true,
-        promptTemplates: true,
-        multiModalRAG: false
+        openaiCompatible: true,
+        visionCapabilities: true,
+        webpageAnalysis: true
       }
     };
   }
 
   /**
-   * Query RAG context (Alfa-specific feature)
-   */
-  async getRagContext(query, k = 5) {
-    if (!this.config.apiHost || !this.config.indexId) {
-      throw new Error('RAG context requires apiHost and indexId configuration');
-    }
-
-    try {
-      const ragClient = axios.create({
-        baseURL: this.config.apiHost,
-        headers: {
-          'Authorization': `Bearer ${this.config.authToken}`,
-          'x-claim': this.config.projectId
-        }
-      });
-
-      const response = await ragClient.post('/indices/rag-context', {
-        index_uuid: this.config.indexId,
-        query: query,
-        k: k
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('❌ Error retrieving RAG context:', error.message);
-      throw error;
-    }
-  }
-
-  /**
-   * Reset conversation (start fresh)
+   * Reset conversation history
    */
   async resetConversation() {
-    this.conversationId = null;
-    console.log('🔄 Alfa conversation reset');
+    this.conversationHistory = [];
+    console.log('🔄 Alfa conversation history reset');
   }
 
   /**
-   * Get conversation history from Alfa
+   * Get conversation history
    */
   async getConversationHistory() {
-    if (!this.conversationId) {
-      return [];
-    }
+    return this.conversationHistory;
+  }
 
-    try {
-      const response = await this.apiClient.get(`/conversations/${this.conversationId}/history`);
-      return response.data.messages || [];
-    } catch (error) {
-      console.error('❌ Error fetching conversation history:', error.message);
-      return [];
+  /**
+   * Create a prompt optimized for webpage analysis (based on the curl example)
+   */
+  createWebpageAnalysisPrompt(webpageContent, userQuestion, imageInfo = null) {
+    let prompt = `Based on the following webpage content, please answer the user's question.\n\nWebpage Content:\n${webpageContent}\n\n`;
+    
+    if (imageInfo) {
+      prompt += `IMAGE INFORMATION:\n`;
+      prompt += `- Total images found on this webpage: ${imageInfo.totalImages || 0}\n`;
+      prompt += `- Images I was able to process and analyze: ${imageInfo.processedImages || 0}\n\n`;
     }
+    
+    prompt += `User's Question: ${userQuestion}`;
+    
+    return prompt;
   }
 } 

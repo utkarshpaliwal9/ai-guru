@@ -58,8 +58,14 @@ export function handleSocketConnection(socket, io) {
         isTyping: true
       });
 
-      // Process message through base LLM (Alfa)
-      await processBaseLLMResponse(conversation, content, io, conversationId);
+      // Process message through base LLM (Alfa) with timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('LLM response timeout')), 35000);
+      });
+      
+      const responsePromise = processBaseLLMResponse(conversation, content, io, conversationId);
+      
+      await Promise.race([responsePromise, timeoutPromise]);
 
     } catch (error) {
       console.error('❌ Error handling message:', error);

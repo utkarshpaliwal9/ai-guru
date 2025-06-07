@@ -106,6 +106,16 @@ class BaseLLMService {
       // Get response from base LLM (Alfa)
       const response = await this.alfaProvider.sendMessage(enhancedMessage, context);
 
+      // Check if response has an error
+      if (response.error) {
+        throw new Error(response.message || response.error || 'Unknown error from Alfa provider');
+      }
+
+      // Ensure we have content
+      if (!response.content) {
+        throw new Error('Empty response from Alfa provider');
+      }
+
       return {
         content: response.content,
         metadata: {
