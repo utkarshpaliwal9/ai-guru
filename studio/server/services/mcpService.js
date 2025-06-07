@@ -1,12 +1,19 @@
 import { spawn } from 'child_process';
 
 // Try to import MCP SDK, but handle gracefully if not available
-let Client, StdioClientTransport;
+let Client, StdioClientTransport, HttpClientTransport;
 try {
   const mcpSdk = await import('@modelcontextprotocol/sdk/client/index.js');
   Client = mcpSdk.Client;
   const mcpStdio = await import('@modelcontextprotocol/sdk/client/stdio.js');
   StdioClientTransport = mcpStdio.StdioClientTransport;
+  // Try to import HTTP transport if available
+  try {
+    const mcpHttp = await import('@modelcontextprotocol/sdk/client/http.js');
+    HttpClientTransport = mcpHttp.HttpClientTransport;
+  } catch (httpError) {
+    console.warn('⚠️  HTTP transport not available in MCP SDK');
+  }
 } catch (error) {
   console.warn('⚠️  MCP SDK not available. MCP functionality will be limited.');
   console.warn('To enable MCP support, install: npm install @modelcontextprotocol/sdk');
@@ -30,27 +37,97 @@ class MCPService {
         throw new Error('No MCP configuration found for agent');
       }
 
-      const config = agent.mcpConfig;
+      // Handle different MCP config structures
+      let serverConfig;
+      if (agent.mcpConfig.mcpServers) {
+        // Handle nested mcpServers structure
+        const serverNames = Object.keys(agent.mcpConfig.mcpServers);
+        if (serverNames.length === 0) {
+          throw new Error('No MCP servers configured');
+        }
+        // Use the first server for now (could be enhanced to handle multiple servers)
+        const serverName = serverNames[0];
+        serverConfig = agent.mcpConfig.mcpServers[serverName];
+        console.log(`🔧 Using MCP server: ${serverName}`);
+      } else {
+        // Handle direct config structure
+        serverConfig = agent.mcpConfig;
+      }
+
       let transport;
       let client;
 
       // Handle different MCP server types
-      if (config.command) {
+      if (serverConfig.command) {
         // Stdio transport for command-based servers
-        const process = spawn(config.command, config.args || [], {
-          env: { ...process.env, ...config.env },
-          cwd: config.cwd || process.cwd()
+        console.log(`🚀 Starting MCP server: ${serverConfig.command} ${(serverConfig.args || []).join(' ')}`);
+        
+        // Validate command and args
+        if (typeof serverConfig.command !== 'string') {
+          throw new Error(`Invalid command type: expected string, got ${typeof serverConfig.command}`);
+        }
+        
+        const args = serverConfig.args || [];
+        const validArgs = args.filter(arg => arg !== undefined && arg !== null).map(arg => String(arg));
+        
+        console.log(`🔧 Command: "${serverConfig.command}"`);
+        console.log(`🔧 Args: [${validArgs.map(arg => `"${arg}"`).join(', ')}]`);
+        
+        // Use shell for better command resolution
+        const childProcess = spawn(serverConfig.command, validArgs, {
+          env: { ...process.env, ...serverConfig.env },
+          cwd: serverConfig.cwd || process.cwd(),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: true // Always use shell for better command resolution
+        });
+
+        // Handle process errors
+        childProcess.on('error', (error) => {
+          console.error(`❌ MCP server process error:`, error);
+          throw error;
+        });
+
+        childProcess.on('spawn', () => {
+          console.log(`✅ MCP server process spawned successfully`);
+        });
+
+        childProcess.stderr.on('data', (data) => {
+          console.warn(`⚠️  MCP server stderr:`, data.toString());
         });
 
         transport = new StdioClientTransport({
-          reader: process.stdout,
-          writer: process.stdin
+          reader: childProcess.stdout,
+          writer: childProcess.stdin
         });
-      } else if (config.transport === 'http' && config.endpoint) {
+      } else if (serverConfig.transport === 'http' && serverConfig.endpoint) {
         // HTTP transport for web-based MCP servers
-        transport = new HttpClientTransport(config.endpoint);
+        if (!HttpClientTransport) {
+          throw new Error('HTTP transport not available in MCP SDK');
+        }
+        transport = new HttpClientTransport(serverConfig.endpoint);
+      } else if (serverConfig.transport === 'stdio' && serverConfig.command) {
+        // Explicit stdio transport
+        if (typeof serverConfig.command !== 'string') {
+          throw new Error(`Invalid command type: expected string, got ${typeof serverConfig.command}`);
+        }
+        
+        const args = serverConfig.args || [];
+        const validArgs = args.filter(arg => arg !== undefined && arg !== null).map(arg => String(arg));
+        
+        const childProcess = spawn(serverConfig.command, validArgs, {
+          env: { ...process.env, ...serverConfig.env },
+          cwd: serverConfig.cwd || process.cwd(),
+          stdio: ['pipe', 'pipe', 'pipe'],
+          shell: true
+        });
+
+        transport = new StdioClientTransport({
+          reader: childProcess.stdout,
+          writer: childProcess.stdin
+        });
       } else {
-        throw new Error('Unsupported MCP transport configuration');
+        console.error('❌ Invalid MCP config:', serverConfig);
+        throw new Error(`Unsupported MCP transport configuration. Expected 'command' with optional 'args', or 'transport' with 'endpoint'. Got: ${JSON.stringify(serverConfig)}`);
       }
 
       client = new Client({
@@ -60,13 +137,14 @@ class MCPService {
         capabilities: {}
       });
 
+      console.log(`🔗 Connecting to MCP server for agent: ${agent.name}`);
       await client.connect(transport);
 
       // Store the connection
       this.connections.set(agent.id, {
         client,
         transport,
-        config,
+        config: serverConfig,
         agent
       });
 
