@@ -14,6 +14,11 @@ export default function Home() {
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const { socket, isConnected } = useSocket();
 
+  // Handle conversation selection - convert empty string to null for consistency
+  const handleConversationSelect = (id: string) => {
+    setCurrentConversationId(id || null);
+  };
+
   return (
     <>
       <Head>
@@ -91,7 +96,7 @@ export default function Home() {
               <div className="w-80 bg-white border-r border-gray-200">
                 <ConversationList
                   currentConversationId={currentConversationId}
-                  onConversationSelect={setCurrentConversationId}
+                  onConversationSelect={handleConversationSelect}
                 />
               </div>
               

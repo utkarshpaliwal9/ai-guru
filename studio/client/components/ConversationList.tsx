@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, MessageCircle, Trash2 } from 'lucide-react';
+import { Plus, MessageCircle, Trash2, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Conversation {
@@ -68,6 +68,43 @@ export default function ConversationList({
     }
   };
 
+  const deleteConversation = async (conversationId: string, conversationTitle: string, event: React.MouseEvent) => {
+    // Prevent the click from bubbling up to the conversation selection
+    event.stopPropagation();
+    
+    // Show confirmation dialog
+    const isConfirmed = window.confirm(
+      `Are you sure you want to delete "${conversationTitle}"?\n\nThis action cannot be undone and will permanently remove all messages in this conversation.`
+    );
+    
+    if (!isConfirmed) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${conversationId}`, {
+        method: 'DELETE'
+      });
+
+      if (response.ok) {
+        // Remove conversation from local state
+        setConversations(prev => prev.filter(conv => conv.id !== conversationId));
+        
+        // If the deleted conversation was currently selected, clear the selection
+        if (currentConversationId === conversationId) {
+          onConversationSelect('');
+        }
+        
+        toast.success('Conversation deleted successfully');
+      } else {
+        throw new Error('Failed to delete conversation');
+      }
+    } catch (error) {
+      console.error('Error deleting conversation:', error);
+      toast.error('Failed to delete conversation');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-4">
@@ -105,19 +142,32 @@ export default function ConversationList({
                 key={conversation.id}
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
                 onClick={() => onConversationSelect(conversation.id)}
-                className={`p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
                   currentConversationId === conversation.id
                     ? 'bg-primary-50 border border-primary-200'
                     : 'hover:bg-gray-50'
                 }`}
               >
-                <h3 className="text-sm font-medium text-gray-900 truncate">
-                  {conversation.title}
-                </h3>
-                <p className="text-xs text-gray-400 mt-1">
-                  {new Date(conversation.updatedAt).toLocaleDateString()}
-                </p>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-medium text-gray-900 truncate pr-8">
+                      {conversation.title}
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {new Date(conversation.updatedAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  
+                  <button
+                    onClick={(e) => deleteConversation(conversation.id, conversation.title, e)}
+                    className="absolute top-3 right-3 p-1 opacity-0 group-hover:opacity-100 hover:bg-red-100 rounded transition-all duration-200"
+                    title="Delete conversation"
+                  >
+                    <Trash2 className="w-3 h-3 text-red-500 hover:text-red-700" />
+                  </button>
+                </div>
               </motion.div>
             ))}
           </div>

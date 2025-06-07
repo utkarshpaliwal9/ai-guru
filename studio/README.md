@@ -121,29 +121,48 @@ NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 
 ### Agent Configuration Examples
 
-**OpenAI GPT-4**
+The platform now supports a **flexible provider system** that can connect to multiple LLM types:
+
+**Alfa (Avalara's Enterprise RAG AI)**
 ```json
 {
-  "name": "GPT-4",
-  "apiEndpoint": "https://api.openai.com/v1/chat/completions",
-  "apiKey": "sk-...",
+  "name": "Alfa-Assistant",
+  "providerType": "alfa",
   "configuration": {
-    "model": "gpt-4",
-    "temperature": "0.7",
-    "max_tokens": "2000"
+    "authToken": "your-auth-token",
+    "projectId": "your-project-uuid",
+    "chatHost": "https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io",
+    "apiHost": "https://clip-api.gamma.qa.us-west-2.aws.avalara.io",
+    "model": "gpt-4o-mini",
+    "indexId": "your-index-uuid",
+    "ragEnabled": true
   }
 }
 ```
 
-**Claude API**
+**OpenAI GPT-4**
 ```json
 {
-  "name": "Claude",
-  "apiEndpoint": "https://api.anthropic.com/v1/messages",
-  "apiKey": "sk-ant-...",
+  "name": "GPT-4",
+  "providerType": "openai",
   "configuration": {
-    "model": "claude-3-sonnet-20240229",
-    "max_tokens": "1000"
+    "apiKey": "sk-...",
+    "model": "gpt-4",
+    "temperature": 0.7,
+    "maxTokens": 2000,
+    "systemPrompt": "You are a helpful assistant."
+  }
+}
+```
+
+**Legacy Support (Backward Compatible)**
+```json
+{
+  "name": "Custom-Agent",
+  "apiEndpoint": "https://your-custom-api.com/chat",
+  "apiKey": "your-key",
+  "configuration": {
+    "customParam": "value"
   }
 }
 ```
@@ -225,6 +244,16 @@ The platform features a modern, beautiful interface with:
 - `PUT /api/mcp/:id` - Update MCP server
 - `DELETE /api/mcp/:id` - Delete MCP server
 
+### LLM Providers
+- `GET /api/providers/types` - List available provider types
+- `GET /api/providers/types/:type/template` - Get configuration template
+- `GET /api/providers/types/:type/requirements` - Get required fields
+- `POST /api/providers/validate` - Validate provider configuration
+- `GET /api/providers` - List active providers
+- `GET /api/providers/stats` - Get provider statistics
+- `POST /api/providers/test-all` - Test all providers
+- `POST /api/providers/:name/test` - Test specific provider
+
 ## 🌐 Socket.IO Events
 
 ### Client → Server
@@ -275,11 +304,49 @@ docker build -t agentic-chatbot .
 docker run -p 3000:3000 -p 5000:5000 agentic-chatbot
 ```
 
+## 🔌 LLM Provider System
+
+The platform features a **flexible provider architecture** that supports multiple LLM types:
+
+### Available Providers
+
+- **🚀 Alfa Provider**: Avalara's enterprise RAG-based AI system
+- **🤖 OpenAI Provider**: Standard OpenAI API integration
+- **🔧 Custom Providers**: Extensible system for adding new LLM types
+
+### Provider Features
+
+- **Standardized Interface**: All providers implement the same API contract
+- **Dynamic Configuration**: Hot-swap providers without restart
+- **Capability Detection**: Automatic feature discovery per provider
+- **Connection Testing**: Built-in health checks and validation
+- **Error Handling**: Consistent error responses across providers
+
+### Adding New Providers
+
+```javascript
+// Example: Adding a Claude provider
+import { BaseLLMProvider } from './BaseLLMProvider.js';
+
+class ClaudeProvider extends BaseLLMProvider {
+  async sendMessage(message, context) {
+    // Implementation here
+  }
+  
+  async testConnection() {
+    // Implementation here
+  }
+}
+
+// Register with factory
+providerFactory.registerProvider('claude', ClaudeProvider);
+```
+
 ## 🔮 Roadmap
 
 - [ ] **Database Integration** (PostgreSQL, MongoDB)
 - [ ] **User Authentication** and multi-tenancy
-- [ ] **Plugin System** for custom integrations
+- [ ] **Additional LLM Providers** (Claude, Gemini, Local LLMs)
 - [ ] **Voice Chat** support
 - [ ] **Mobile App** (React Native)
 - [ ] **Cloud Deployment** templates

@@ -1,143 +1,90 @@
-import axios from 'axios';
+import { providerFactory } from './providers/ProviderFactory.js';
 
-// Call an agent's API with the provided context
+// Call an agent's API using the provider system
 export async function callAgentAPI(agent, context) {
   try {
     console.log(`🤖 Calling agent: ${agent.name}`);
     
-    // Prepare the request payload
-    const payload = {
-      message: context.currentMessage,
-      conversation_history: context.conversationHistory,
-      configuration: context.agentConfiguration,
-      timestamp: context.timestamp
-    };
-
-    // Prepare headers
-    const headers = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Agentic-Chatbot-Platform/1.0'
-    };
-
-    // Add API key if provided
-    if (agent.apiKey && agent.apiKey !== '') {
-      headers['Authorization'] = `Bearer ${agent.apiKey}`;
-    }
-
-    // Add custom headers from agent configuration
-    if (agent.configuration?.headers) {
-      Object.assign(headers, agent.configuration.headers);
-    }
-
-    // Make the API call
-    const response = await axios.post(agent.apiEndpoint, payload, {
-      headers,
-      timeout: 30000, // 30 second timeout
-      validateStatus: (status) => status < 500 // Accept 4xx as valid responses
-    });
-
-    // Handle different response formats
-    let responseData = response.data;
+    // Get or create provider for this agent
+    let provider = providerFactory.getProvider(agent.name);
     
-    // If response is a string, wrap it in an object
-    if (typeof responseData === 'string') {
-      responseData = { content: responseData };
+    if (!provider) {
+      // Create provider based on agent configuration
+      const providerConfig = {
+        name: agent.name,
+        type: agent.providerType || 'openai', // Default to OpenAI if not specified
+        ...agent.configuration
+      };
+      
+      // Map legacy fields to provider config
+      if (agent.apiKey) providerConfig.apiKey = agent.apiKey;
+      if (agent.apiEndpoint) providerConfig.apiEndpoint = agent.apiEndpoint;
+      
+      provider = await providerFactory.createProvider(providerConfig);
     }
-
-    // Simulate response delay based on agent configuration
-    if (agent.configuration?.simulateDelay) {
-      const delay = agent.configuration.simulateDelay || 1000;
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    console.log(`✅ Agent ${agent.name} responded successfully`);
     
-    return {
-      content: responseData.content || responseData.message || responseData.response || 'Agent responded',
+    // Prepare context for provider
+    const providerContext = {
+      history: context.conversationHistory || [],
       metadata: {
         agentId: agent.id,
         agentName: agent.name,
-        responseTime: Date.now(),
-        statusCode: response.status,
-        ...responseData.metadata
+        timestamp: context.timestamp,
+        ...context.agentConfiguration
+      }
+    };
+    
+    // Call provider
+    const response = await provider.sendMessage(context.currentMessage, providerContext);
+    
+    console.log(`✅ Agent ${agent.name} responded via ${provider.type} provider`);
+    
+    return {
+      content: response.content,
+      metadata: {
+        agentId: agent.id,
+        agentName: agent.name,
+        provider: provider.type,
+        ...response.metadata
       }
     };
 
   } catch (error) {
     console.error(`❌ Error calling agent ${agent.name}:`, error.message);
-
-    // Handle different types of errors
-    if (error.code === 'ECONNREFUSED') {
-      throw new Error(`Unable to connect to agent ${agent.name}. Please check the endpoint URL.`);
-    }
-    
-    if (error.code === 'ETIMEDOUT') {
-      throw new Error(`Agent ${agent.name} timed out. Please try again.`);
-    }
-
-    if (error.response) {
-      // Server responded with error status
-      const status = error.response.status;
-      const message = error.response.data?.message || error.response.data?.error || 'Unknown error';
-      
-      if (status === 401) {
-        throw new Error(`Authentication failed for agent ${agent.name}. Please check the API key.`);
-      }
-      
-      if (status === 403) {
-        throw new Error(`Access forbidden for agent ${agent.name}. Please check permissions.`);
-      }
-      
-      if (status === 404) {
-        throw new Error(`Agent ${agent.name} endpoint not found. Please check the URL.`);
-      }
-      
-      throw new Error(`Agent ${agent.name} returned error ${status}: ${message}`);
-    }
-
-    // Network error or other issues
     throw new Error(`Failed to communicate with agent ${agent.name}: ${error.message}`);
   }
 }
 
-// Test agent connection
+// Test agent connection using provider system
 export async function testAgentConnection(agent) {
   try {
     console.log(`🔍 Testing connection to agent: ${agent.name}`);
     
-    const testPayload = {
-      message: 'Connection test',
-      test: true
-    };
-
-    const headers = {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Agentic-Chatbot-Platform/1.0'
-    };
-
-    if (agent.apiKey && agent.apiKey !== '') {
-      headers['Authorization'] = `Bearer ${agent.apiKey}`;
-    }
-
-    const startTime = Date.now();
+    // Get or create provider for testing
+    let provider = providerFactory.getProvider(agent.name);
     
-    const response = await axios.post(agent.apiEndpoint, testPayload, {
-      headers,
-      timeout: 10000, // 10 second timeout for testing
-      validateStatus: (status) => status < 500
-    });
-
-    const endTime = Date.now();
-    const latency = endTime - startTime;
-
-    console.log(`✅ Agent ${agent.name} connection test successful`);
+    if (!provider) {
+      const providerConfig = {
+        name: agent.name,
+        type: agent.providerType || 'openai',
+        ...agent.configuration
+      };
+      
+      if (agent.apiKey) providerConfig.apiKey = agent.apiKey;
+      if (agent.apiEndpoint) providerConfig.apiEndpoint = agent.apiEndpoint;
+      
+      provider = await providerFactory.createProvider(providerConfig);
+    }
+    
+    // Test the provider connection
+    const result = await provider.testConnection();
+    
+    console.log(`✅ Agent ${agent.name} connection test completed`);
     
     return {
-      success: true,
-      latency,
-      statusCode: response.status,
-      message: 'Connection successful',
-      timestamp: new Date().toISOString()
+      ...result,
+      provider: provider.type,
+      capabilities: provider.getCapabilities()
     };
 
   } catch (error) {

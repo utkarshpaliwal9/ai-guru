@@ -5,6 +5,7 @@ import {
   getAllAgents, 
   deleteAgent 
 } from '../utils/storage.js';
+import { testAgentConnection } from '../services/agentService.js';
 
 const router = express.Router();
 
@@ -43,22 +44,32 @@ router.post('/', async (req, res) => {
       apiKey, 
       configuration = {},
       mcpServerId = null,
+      providerType = 'openai', // New field for provider type
       isActive = true
     } = req.body;
 
-    if (!name || !apiEndpoint) {
+    if (!name) {
       return res.status(400).json({ 
-        error: 'Name and API endpoint are required' 
+        error: 'Name is required' 
+      });
+    }
+
+    // For backward compatibility, still allow apiEndpoint
+    // But prefer provider-based configuration
+    if (!providerType && !apiEndpoint) {
+      return res.status(400).json({ 
+        error: 'Either providerType or apiEndpoint is required' 
       });
     }
 
     const agent = {
       name,
       description: description || '',
-      apiEndpoint,
+      apiEndpoint: apiEndpoint || '', // Keep for backward compatibility
       apiKey: apiKey || '',
       configuration,
       mcpServerId,
+      providerType, // New field
       isActive,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -189,6 +200,27 @@ router.patch('/:id/toggle', async (req, res) => {
   } catch (error) {
     console.error('Error toggling agent status:', error);
     res.status(500).json({ error: 'Failed to toggle agent status' });
+  }
+});
+
+// Test agent connection
+router.post('/:id/test', async (req, res) => {
+  try {
+    const agentId = req.params.id;
+    
+    const agent = await getAgent(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const result = await testAgentConnection(agent);
+    res.json(result);
+  } catch (error) {
+    console.error('Error testing agent:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Failed to test agent connection' 
+    });
   }
 });
 
