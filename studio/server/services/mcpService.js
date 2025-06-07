@@ -49,9 +49,16 @@ class MCPService {
         const serverName = serverNames[0];
         serverConfig = agent.mcpConfig.mcpServers[serverName];
         console.log(`🔧 Using MCP server: ${serverName}`);
+        console.log(`🔧 Server config:`, JSON.stringify(serverConfig, null, 2));
       } else {
         // Handle direct config structure
         serverConfig = agent.mcpConfig;
+        console.log(`🔧 Direct config:`, JSON.stringify(serverConfig, null, 2));
+      }
+
+      // Validate serverConfig
+      if (!serverConfig || typeof serverConfig !== 'object') {
+        throw new Error(`Invalid server configuration: expected object, got ${typeof serverConfig}`);
       }
 
       let transport;
@@ -59,13 +66,13 @@ class MCPService {
 
       // Handle different MCP server types
       if (serverConfig.command) {
+        // Validate command first
+        if (!serverConfig.command || typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
+          throw new Error(`Invalid command: expected non-empty string, got ${typeof serverConfig.command} "${serverConfig.command}"`);
+        }
+        
         // Stdio transport for command-based servers
         console.log(`🚀 Starting MCP server: ${serverConfig.command} ${(serverConfig.args || []).join(' ')}`);
-        
-        // Validate command and args
-        if (typeof serverConfig.command !== 'string') {
-          throw new Error(`Invalid command type: expected string, got ${typeof serverConfig.command}`);
-        }
         
         const args = serverConfig.args || [];
         const validArgs = args.filter(arg => arg !== undefined && arg !== null).map(arg => String(arg));
@@ -73,31 +80,12 @@ class MCPService {
         console.log(`🔧 Command: "${serverConfig.command}"`);
         console.log(`🔧 Args: [${validArgs.map(arg => `"${arg}"`).join(', ')}]`);
         
-        // Use shell for better command resolution
-        const childProcess = spawn(serverConfig.command, validArgs, {
-          env: { ...process.env, ...serverConfig.env },
-          cwd: serverConfig.cwd || process.cwd(),
-          stdio: ['pipe', 'pipe', 'pipe'],
-          shell: true // Always use shell for better command resolution
-        });
-
-        // Handle process errors
-        childProcess.on('error', (error) => {
-          console.error(`❌ MCP server process error:`, error);
-          throw error;
-        });
-
-        childProcess.on('spawn', () => {
-          console.log(`✅ MCP server process spawned successfully`);
-        });
-
-        childProcess.stderr.on('data', (data) => {
-          console.warn(`⚠️  MCP server stderr:`, data.toString());
-        });
-
+        // Let StdioClientTransport handle the process creation
         transport = new StdioClientTransport({
-          reader: childProcess.stdout,
-          writer: childProcess.stdin
+          command: serverConfig.command,
+          args: validArgs,
+          env: { ...process.env, ...serverConfig.env },
+          cwd: serverConfig.cwd || process.cwd()
         });
       } else if (serverConfig.transport === 'http' && serverConfig.endpoint) {
         // HTTP transport for web-based MCP servers
@@ -107,23 +95,18 @@ class MCPService {
         transport = new HttpClientTransport(serverConfig.endpoint);
       } else if (serverConfig.transport === 'stdio' && serverConfig.command) {
         // Explicit stdio transport
-        if (typeof serverConfig.command !== 'string') {
-          throw new Error(`Invalid command type: expected string, got ${typeof serverConfig.command}`);
+        if (!serverConfig.command || typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
+          throw new Error(`Invalid command: expected non-empty string, got ${typeof serverConfig.command} "${serverConfig.command}"`);
         }
         
         const args = serverConfig.args || [];
         const validArgs = args.filter(arg => arg !== undefined && arg !== null).map(arg => String(arg));
         
-        const childProcess = spawn(serverConfig.command, validArgs, {
-          env: { ...process.env, ...serverConfig.env },
-          cwd: serverConfig.cwd || process.cwd(),
-          stdio: ['pipe', 'pipe', 'pipe'],
-          shell: true
-        });
-
         transport = new StdioClientTransport({
-          reader: childProcess.stdout,
-          writer: childProcess.stdin
+          command: serverConfig.command,
+          args: validArgs,
+          env: { ...process.env, ...serverConfig.env },
+          cwd: serverConfig.cwd || process.cwd()
         });
       } else {
         console.error('❌ Invalid MCP config:', serverConfig);
@@ -267,6 +250,9 @@ class MCPService {
    */
   async testConnection(agent) {
     try {
+      console.log(`🧪 Starting test connection for agent: ${agent.name}`);
+      console.log(`🧪 Agent mcpConfig:`, JSON.stringify(agent.mcpConfig, null, 2));
+      
       const client = await this.initializeAgent(agent);
       const tools = await client.listTools();
       await this.closeConnection(agent.id);
@@ -279,11 +265,62 @@ class MCPService {
       };
 
     } catch (error) {
+      console.log(`🧪 Test connection failed for agent: ${agent.name}`);
+      console.log(`🧪 Error details:`, error);
+      console.log(`🧪 Error stack:`, error.stack);
+      
       return {
         success: false,
         message: error.message,
         error: true
       };
+    }
+  }
+
+  /**
+   * Test spawn command directly
+   */
+  async testSpawn(command, args = []) {
+    try {
+      console.log(`🧪 Testing spawn with command: "${command}" and args:`, args);
+      
+      const childProcess = spawn(command, args, {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        shell: true
+      });
+
+      return new Promise((resolve, reject) => {
+        let stdout = '';
+        let stderr = '';
+
+        childProcess.stdout.on('data', (data) => {
+          stdout += data.toString();
+        });
+
+        childProcess.stderr.on('data', (data) => {
+          stderr += data.toString();
+        });
+
+        childProcess.on('error', (error) => {
+          console.log(`🧪 Spawn error:`, error);
+          reject(error);
+        });
+
+        childProcess.on('close', (code) => {
+          console.log(`🧪 Spawn closed with code: ${code}`);
+          resolve({ code, stdout, stderr });
+        });
+
+        // Kill after 5 seconds
+        setTimeout(() => {
+          childProcess.kill();
+          resolve({ code: 'timeout', stdout, stderr });
+        }, 5000);
+      });
+
+    } catch (error) {
+      console.log(`🧪 Direct spawn test failed:`, error);
+      throw error;
     }
   }
 

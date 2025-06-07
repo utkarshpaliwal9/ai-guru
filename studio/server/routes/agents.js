@@ -226,4 +226,29 @@ router.post('/:id/test', async (req, res) => {
   }
 });
 
+// Debug spawn command
+router.post('/:id/debug-spawn', async (req, res) => {
+  try {
+    const agentId = req.params.id;
+    
+    const agent = await getAgent(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    // Import mcpService
+    const { mcpService } = await import('../services/mcpService.js');
+    
+    // Test spawn directly
+    const result = await mcpService.testSpawn('npx', ['@playwright/mcp@latest']);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Error testing spawn:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 export default router; 
