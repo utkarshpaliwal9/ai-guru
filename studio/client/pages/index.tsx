@@ -12,6 +12,7 @@ type TabType = 'chat' | 'agents' | 'mcp';
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
+  const [isChatSidebarCollapsed, setIsChatSidebarCollapsed] = useState(false);
   const { socket, isConnected } = useSocket();
 
   // Handle conversation selection - convert empty string to null for consistency
@@ -28,7 +29,7 @@ export default function Home() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <div className="h-screen bg-gray-50 flex">
+      <div className="h-screen bg-gray-50 flex overflow-hidden">
         {/* Sidebar */}
         <div className="w-64 bg-white shadow-lg flex flex-col">
           {/* Header */}
@@ -47,7 +48,10 @@ export default function Home() {
           {/* Navigation */}
           <nav className="flex-1 p-4 space-y-2">
             <button
-              onClick={() => setActiveTab('chat')}
+              onClick={() => {
+                setActiveTab('chat');
+                setIsChatSidebarCollapsed(!isChatSidebarCollapsed);
+              }}
               className={`sidebar-item w-full ${
                 activeTab === 'chat' ? 'sidebar-item-active' : 'sidebar-item-inactive'
               }`}
@@ -92,13 +96,15 @@ export default function Home() {
         <div className="flex-1 flex">
           {activeTab === 'chat' && (
             <>
-              {/* Conversation List */}
-              <div className="w-80 bg-white border-r border-gray-200">
-                <ConversationList
-                  currentConversationId={currentConversationId}
-                  onConversationSelect={handleConversationSelect}
-                />
-              </div>
+              {/* Conversation List - Collapsible */}
+              {!isChatSidebarCollapsed && (
+                <div className="w-80 bg-white border-r border-gray-200">
+                  <ConversationList
+                    currentConversationId={currentConversationId}
+                    onConversationSelect={handleConversationSelect}
+                  />
+                </div>
+              )}
               
               {/* Chat Interface */}
               <div className="flex-1">
