@@ -406,4 +406,94 @@ body {
 
 .resizing .resize-grip {
   pointer-events: auto;
+}
+
+/* Agent autocomplete dropdown styles */
+.agent-autocomplete {
+  position: absolute;
+  bottom: 100%;
+  left: 10px;
+  right: 10px;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+}
+
+.agent-autocomplete.show {
+  display: block;
+}
+
+.agent-suggestion {
+  padding: 12px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s ease;
+}
+
+.agent-suggestion:last-child {
+  border-bottom: none;
+}
+
+.agent-suggestion:hover,
+.agent-suggestion.highlighted {
+  background-color: #f8f9fa;
+}
+
+.agent-suggestion.selected {
+  background-color: #e3f2fd;
+}
+
+.agent-icon {
+  width: 20px;
+  height: 20px;
+  background-color: #007bff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+  margin-right: 10px;
+  flex-shrink: 0;
+}
+
+.agent-details {
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.agent-name {
+  font-weight: 600;
+  color: #333;
+  font-size: 0.9em;
+  margin-bottom: 2px;
+}
+
+.agent-endpoint {
+  font-size: 0.75em;
+  color: #666;
+  font-family: monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.no-agents-found {
+  padding: 15px;
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  font-size: 0.85em;
+}
+
+.input-area {
+  position: relative;
 } 

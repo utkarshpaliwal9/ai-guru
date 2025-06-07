@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const agentModeCheckbox = document.getElementById('agentMode');
   const tabsList = document.getElementById('tabsList');
   const newTabBtn = document.getElementById('newTabBtn');
+  const agentAutocomplete = document.getElementById('agentAutocomplete');
   const body = document.body;
 
   let currentFontSizeScale = 1; // Default scale
@@ -14,6 +15,13 @@ document.addEventListener('DOMContentLoaded', function() {
   let activeTabId = 1;
   let nextTabId = 2;
   let tabData = {}; // Store conversations per tab
+  
+  // Autocomplete state
+  let autocompleteVisible = false;
+  let availableAgents = [];
+  let filteredAgents = [];
+  let selectedSuggestionIndex = -1;
+  let atSymbolPosition = -1;
 
   // New default dimensions (smaller)
   const DEFAULT_WIDTH = 500;
@@ -417,23 +425,150 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
-  // Add input event listener to help with agent suggestions
+  // Enhanced input event listener with autocomplete
   userInput.addEventListener('input', function(event) {
     const value = userInput.value;
+    const cursorPosition = userInput.selectionStart;
     
-    // Simple feedback when user types @
-    if (value.endsWith('@')) {
-      // Load agents and show available ones
-      chrome.storage.local.get(['agents'], function(result) {
-        const agents = result.agents || [];
-        if (agents.length > 0) {
-          const agentNames = agents.map(agent => agent.name).join(', ');
-          console.log('Available agents:', agentNames);
-          // You could show a tooltip or dropdown here in a future enhancement
+    // Find @ symbol before cursor
+    const textBeforeCursor = value.substring(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    
+    if (lastAtIndex !== -1) {
+      // Check if @ is at the start or preceded by a space
+      const charBeforeAt = lastAtIndex > 0 ? value[lastAtIndex - 1] : ' ';
+      
+      if (charBeforeAt === ' ' || lastAtIndex === 0) {
+        const query = textBeforeCursor.substring(lastAtIndex + 1);
+        
+        // Only show autocomplete if no space after @
+        if (!query.includes(' ')) {
+          atSymbolPosition = lastAtIndex;
+          showAgentAutocomplete(query);
+          return;
         }
-      });
+      }
     }
+    
+    // Hide autocomplete if @ not found or conditions not met
+    hideAgentAutocomplete();
   });
+
+  // Agent autocomplete functions
+  function showAgentAutocomplete(query) {
+    // Load agents from storage
+    chrome.storage.local.get(['agents'], function(result) {
+      availableAgents = result.agents || [];
+      
+      if (availableAgents.length === 0) {
+        hideAgentAutocomplete();
+        return;
+      }
+      
+      // Filter agents based on query
+      const lowerQuery = query.toLowerCase();
+      filteredAgents = availableAgents.filter(agent => 
+        agent.name.toLowerCase().includes(lowerQuery)
+      );
+      
+      if (filteredAgents.length === 0) {
+        agentAutocomplete.innerHTML = '<div class="no-agents-found">No agents found</div>';
+      } else {
+        renderAgentSuggestions(filteredAgents);
+      }
+      
+      selectedSuggestionIndex = -1;
+      autocompleteVisible = true;
+      agentAutocomplete.classList.add('show');
+    });
+  }
+  
+  function hideAgentAutocomplete() {
+    autocompleteVisible = false;
+    agentAutocomplete.classList.remove('show');
+    selectedSuggestionIndex = -1;
+    atSymbolPosition = -1;
+  }
+  
+  function renderAgentSuggestions(agents) {
+    agentAutocomplete.innerHTML = '';
+    
+    agents.forEach((agent, index) => {
+      const suggestion = document.createElement('div');
+      suggestion.className = 'agent-suggestion';
+      suggestion.dataset.index = index;
+      
+      // Create agent icon with first letter of name
+      const icon = document.createElement('div');
+      icon.className = 'agent-icon';
+      icon.textContent = agent.name.charAt(0).toUpperCase();
+      
+      // Create agent details
+      const details = document.createElement('div');
+      details.className = 'agent-details';
+      
+      const name = document.createElement('div');
+      name.className = 'agent-name';
+      name.textContent = `@${agent.name}`;
+      
+      const endpoint = document.createElement('div');
+      endpoint.className = 'agent-endpoint';
+      endpoint.textContent = agent.endpoint;
+      
+      details.appendChild(name);
+      details.appendChild(endpoint);
+      
+      suggestion.appendChild(icon);
+      suggestion.appendChild(details);
+      
+      // Add click handler
+      suggestion.addEventListener('click', () => selectAgent(agent));
+      
+      agentAutocomplete.appendChild(suggestion);
+    });
+  }
+  
+  function selectAgent(agent) {
+    const currentValue = userInput.value;
+    const beforeAt = currentValue.substring(0, atSymbolPosition);
+    const afterQuery = currentValue.substring(userInput.selectionStart);
+    
+    // Insert agent name with space
+    const newValue = beforeAt + `@${agent.name} ` + afterQuery;
+    userInput.value = newValue;
+    
+    // Position cursor after the inserted agent name
+    const newCursorPosition = beforeAt.length + agent.name.length + 2; // +2 for @ and space
+    userInput.setSelectionRange(newCursorPosition, newCursorPosition);
+    
+    hideAgentAutocomplete();
+    userInput.focus();
+  }
+  
+  function highlightSuggestion(index) {
+    const suggestions = agentAutocomplete.querySelectorAll('.agent-suggestion');
+    
+    // Remove previous highlights
+    suggestions.forEach(s => s.classList.remove('highlighted'));
+    
+    if (index >= 0 && index < suggestions.length) {
+      suggestions[index].classList.add('highlighted');
+      
+      // Scroll into view if needed
+      const highlighted = suggestions[index];
+      const container = agentAutocomplete;
+      const containerTop = container.scrollTop;
+      const containerBottom = containerTop + container.clientHeight;
+      const itemTop = highlighted.offsetTop;
+      const itemBottom = itemTop + highlighted.clientHeight;
+      
+      if (itemTop < containerTop) {
+        container.scrollTop = itemTop;
+      } else if (itemBottom > containerBottom) {
+        container.scrollTop = itemBottom - container.clientHeight;
+      }
+    }
+  }
 
   sendButton.addEventListener('click', function() {
     const question = userInput.value;
@@ -441,14 +576,22 @@ document.addEventListener('DOMContentLoaded', function() {
       return;
     }
     
-    // Parse for @agent syntax
-    const agentMatch = question.match(/^@(\w+)\s+(.*)/);
+    // Parse for @agent syntax - requires at least one space after agent name
+    // Matches: @agentName question OR @agentName   question (with multiple spaces)
+    // Does NOT match: @agentNamequestion (no space)
+    const agentMatch = question.trim().match(/^@(\w+)\s+(.+)/);
     let targetAgent = null;
     let actualQuestion = question;
     
+    console.log('Checking for agent syntax in:', question);
+    console.log('Agent match result:', agentMatch);
+    
     if (agentMatch) {
       targetAgent = agentMatch[1];
-      actualQuestion = agentMatch[2];
+      actualQuestion = agentMatch[2].trim();
+      
+      console.log('Agent detected:', targetAgent);
+      console.log('Actual question:', actualQuestion);
       
       // Display user's question with agent highlight
       displayMessage('User', question);
@@ -456,6 +599,7 @@ document.addEventListener('DOMContentLoaded', function() {
       // Show which agent is being addressed
       displayMessage('System', `${String.fromCodePoint(0x1F916)} Routing to agent: @${targetAgent}`, false);
     } else {
+      console.log('No agent detected, using regular routing');
       // Display user's question normally
       displayMessage('User', question);
     }
@@ -597,8 +741,48 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   userInput.addEventListener('keypress', function(event) {
-    if (event.key === 'Enter') {
+    if (event.key === 'Enter' && !autocompleteVisible) {
       sendButton.click();
+    }
+  });
+
+  // Keyboard navigation for autocomplete
+  userInput.addEventListener('keydown', function(event) {
+    if (!autocompleteVisible) return;
+    
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault();
+        selectedSuggestionIndex = Math.min(selectedSuggestionIndex + 1, filteredAgents.length - 1);
+        highlightSuggestion(selectedSuggestionIndex);
+        break;
+        
+      case 'ArrowUp':
+        event.preventDefault();
+        selectedSuggestionIndex = Math.max(selectedSuggestionIndex - 1, -1);
+        highlightSuggestion(selectedSuggestionIndex);
+        break;
+        
+      case 'Enter':
+      case 'Tab':
+        event.preventDefault();
+        if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < filteredAgents.length) {
+          selectAgent(filteredAgents[selectedSuggestionIndex]);
+        } else if (filteredAgents.length > 0) {
+          // If no specific selection, use first agent
+          selectAgent(filteredAgents[0]);
+        }
+        break;
+        
+      case 'Escape':
+        event.preventDefault();
+        hideAgentAutocomplete();
+        break;
+        
+      case ' ': // Space key
+        // Hide autocomplete when space is pressed
+        hideAgentAutocomplete();
+        break;
     }
   });
 
@@ -693,4 +877,22 @@ document.addEventListener('DOMContentLoaded', function() {
     
     return html;
   }
+
+  // Hide autocomplete when clicking outside
+  document.addEventListener('click', function(event) {
+    if (autocompleteVisible && 
+        !agentAutocomplete.contains(event.target) && 
+        !userInput.contains(event.target)) {
+      hideAgentAutocomplete();
+    }
+  });
+
+  // Also hide when input loses focus (with a small delay to allow for clicking suggestions)
+  userInput.addEventListener('blur', function() {
+    setTimeout(() => {
+      if (autocompleteVisible) {
+        hideAgentAutocomplete();
+      }
+    }, 150);
+  });
 });
