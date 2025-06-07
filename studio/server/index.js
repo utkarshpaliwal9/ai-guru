@@ -88,8 +88,11 @@ server.listen(PORT, () => {
     console.warn('\n⚠️  WARNING: Alfa AI not configured!');
     console.warn('Missing environment variables:', missingAlfaVars.join(', '));
     console.warn('Chat functionality will be limited until Alfa AI is properly configured.');
-    console.warn('See server/.env.example or documentation for setup instructions.\n');
+    console.warn('See server/.env or documentation for setup instructions.\n');
   } else {
     console.log('✅ Alfa AI configuration detected');
+    if (!process.env.ALFA_INDEX_ID) {
+      console.warn('ℹ️  Note: ALFA_INDEX_ID not set - some RAG features may be limited');
+    }
   }
 }); 

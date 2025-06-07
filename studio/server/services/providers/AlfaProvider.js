@@ -29,14 +29,14 @@ export class AlfaProvider extends BaseLLMProvider {
         'x-claim': this.config.projectId,
         'Content-Type': 'application/json'
       },
-      timeout: 30000
+      timeout: 60000 // Increased timeout for streaming
     });
 
     console.log(`🔧 Alfa provider initialized for project ${this.config.projectId}`);
   }
 
   /**
-   * Send message to Alfa and get response
+   * Send message to Alfa and get response (using streaming API)
    */
   async sendMessage(message, context = {}) {
     try {
@@ -49,33 +49,101 @@ export class AlfaProvider extends BaseLLMProvider {
         await this.startConversation();
       }
 
-      // Send message to Alfa conversation API
-      const response = await this.apiClient.post(`/conversations/${this.conversationId}/messages`, {
-        message: message,
-        context: this.prepareContext(context)
-      });
+      console.log(`🤖 Sending message to Alfa conversation: ${this.conversationId}`);
+
+      // Use the correct streaming endpoint and format from documentation
+      const response = await this.apiClient.post(
+        `/conversations/${this.conversationId}/stream`,
+        {
+          question: message, // Use 'question' instead of 'message'
+          args: {} // Add args object as per documentation
+        },
+        {
+          responseType: 'stream' // Handle streaming response
+        }
+      );
+
+      // Parse streaming response
+      const fullResponse = await this.parseStreamingResponse(response);
 
       return this.standardizeResponse({
-        content: response.data.response || response.data.message || 'Response received',
+        content: fullResponse,
         metadata: {
           conversationId: this.conversationId,
-          ...response.data.metadata
+          streamingResponse: true
         }
       });
 
     } catch (error) {
-      console.error(`❌ Alfa provider error:`, error.message);
+      console.error(`❌ Alfa provider error:`, error.response?.data || error.message);
+      if (error.response) {
+        console.error(`❌ Alfa API Status: ${error.response.status}`);
+        console.error(`❌ Alfa API Response:`, error.response.data);
+      }
       return this.standardizeError(error);
     }
   }
 
   /**
-   * Start a new conversation with Alfa
+   * Parse streaming response from Alfa API
+   */
+  async parseStreamingResponse(response) {
+    return new Promise((resolve, reject) => {
+      let fullResponse = '';
+      let buffer = '';
+
+      response.data.on('data', (chunk) => {
+        buffer += chunk.toString('utf-8');
+        
+        // Process complete lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // Keep incomplete line in buffer
+        
+        for (const line of lines) {
+          if (line.trim().startsWith('data:')) {
+            try {
+              const jsonData = line.slice(5).trim(); // Remove 'data:' prefix
+              if (jsonData && jsonData !== '[DONE]') {
+                const parsed = JSON.parse(jsonData);
+                if (parsed.output) {
+                  fullResponse += parsed.output;
+                }
+              }
+            } catch (parseError) {
+              console.warn('❌ Failed to parse streaming chunk:', parseError.message);
+            }
+          }
+        }
+      });
+
+      response.data.on('end', () => {
+        console.log(`✅ Received complete response from Alfa (${fullResponse.length} chars)`);
+        resolve(fullResponse || 'Response received from Alfa');
+      });
+
+      response.data.on('error', (error) => {
+        console.error('❌ Streaming error:', error);
+        reject(error);
+      });
+
+      // Timeout fallback
+      setTimeout(() => {
+        if (fullResponse) {
+          resolve(fullResponse);
+        } else {
+          reject(new Error('Streaming response timeout'));
+        }
+      }, 30000);
+    });
+  }
+
+  /**
+   * Start a new conversation with Alfa (updated to match documentation)
    */
   async startConversation() {
     try {
       const conversationConfig = {
-        index_id: this.config.indexId || null,
+        index_id: this.config.indexId || null, // Make index_id explicit
         config: {
           agent: this.config.agent || 'default',
           assistant_profile: this.config.assistantProfile || null,
@@ -87,14 +155,25 @@ export class AlfaProvider extends BaseLLMProvider {
         }
       };
 
+      console.log(`🚀 Creating Alfa conversation with config:`, JSON.stringify(conversationConfig, null, 2));
+
       const response = await this.apiClient.post('/conversations', conversationConfig);
       
-      this.conversationId = response.data.conversation_id || response.data.id;
+      // Handle both possible response formats
+      this.conversationId = response.data.id || response.data.conversation_id;
       console.log(`✅ Alfa conversation started: ${this.conversationId}`);
+      
+      if (!this.conversationId) {
+        console.error('❌ No conversation ID in response:', response.data);
+        throw new Error('Failed to get conversation ID from Alfa');
+      }
       
       return this.conversationId;
     } catch (error) {
-      console.error('❌ Failed to start Alfa conversation:', error.message);
+      console.error('❌ Failed to start Alfa conversation:', error.response?.data || error.message);
+      if (error.response) {
+        console.error(`❌ Status: ${error.response.status}, Data:`, error.response.data);
+      }
       throw error;
     }
   }

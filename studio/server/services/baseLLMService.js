@@ -19,6 +19,8 @@ class BaseLLMService {
       'ALFA_API_HOST': process.env.ALFA_API_HOST
     };
 
+    // Note: ALFA_INDEX_ID is optional but recommended for better functionality
+
     const missingVars = Object.entries(requiredEnvVars)
       .filter(([key, value]) => !value)
       .map(([key]) => key);
@@ -53,10 +55,11 @@ class BaseLLMService {
         projectId: process.env.ALFA_PROJECT_ID,
         chatHost: process.env.ALFA_CHAT_HOST,
         apiHost: process.env.ALFA_API_HOST,
+        indexId: process.env.ALFA_INDEX_ID || null, // Add index ID for better functionality
         model: process.env.ALFA_MODEL || 'gpt-4o-mini',
         ragEnabled: true,
-        systemPromptName: 'system_prompt',
-        userPromptName: 'user_prompt'
+        systemPromptName: 'demo_rag_system_prompt',
+        userPromptName: 'demo_rag_user_prompt'
       };
 
       this.alfaProvider = await providerFactory.createProvider(alfaConfig);
