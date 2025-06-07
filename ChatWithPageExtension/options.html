@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Chat with Page Options</title>
+  <link rel="stylesheet" type="text/css" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Extension Options</h1>
+    
+    <div class="setting-item">
+      <h2>Alfa API Credentials</h2>
+      <p>Enter your Alfa API credentials to enable the chat functionality.</p>
+      <div class="credentials-form">
+        <div class="input-group">
+          <label for="authToken">API Token:</label>
+          <input type="password" id="authToken" placeholder="sk-your-auth-token-here">
+          <button type="button" id="toggleAuthToken">Show</button>
+        </div>
+        <div class="input-group">
+          <label for="projectId">Project ID:</label>
+          <input type="text" id="projectId" placeholder="your-project-uuid-here">
+        </div>
+        <div class="button-group">
+          <button id="saveCredentials">Save Credentials</button>
+          <button id="clearCredentials">Clear</button>
+        </div>
+        <div id="credentialsStatus" class="status-message"></div>
+      </div>
+    </div>
+    
+    <div class="setting-item">
+      <h2>Custom Agents</h2>
+      <p>Add custom AI agents that you can mention in chat using @agentName syntax.</p>
+      <div class="agents-form">
+        <div class="agent-input-section">
+          <h3>Add New Agent</h3>
+          <div class="input-group">
+            <label for="agentName">Name:</label>
+            <input type="text" id="agentName" placeholder="e.g., Chrome, DocumentIntelligence">
+          </div>
+          <div class="input-group">
+            <label for="agentEndpoint">Endpoint:</label>
+            <input type="url" id="agentEndpoint" placeholder="https://api.example.com/v1/chat/completions">
+          </div>
+          <div class="input-group">
+            <label for="agentApiKey">API Key:</label>
+            <input type="password" id="agentApiKey" placeholder="your-agent-api-key">
+            <button type="button" id="toggleAgentApiKey">Show</button>
+          </div>
+          
+          <div class="extra-fields-section">
+            <h4>Additional Configuration</h4>
+            <p class="field-description">Add custom key-value pairs for agent-specific settings (e.g., model, temperature, headers)</p>
+            <div id="extraFieldsContainer">
+              <!-- Dynamic key-value pairs will be added here -->
+            </div>
+            <button type="button" id="addExtraField" class="add-field-btn">+ Add Field</button>
+          </div>
+          
+          <div class="button-group">
+            <button id="addAgent">Add Agent</button>
+            <button id="cancelEdit" style="display: none;">Cancel Edit</button>
+          </div>
+          <div id="agentStatus" class="status-message"></div>
+        </div>
+        
+        <div class="agents-list-section">
+          <h3>Configured Agents</h3>
+          <div id="agentsList" class="agents-list">
+            <p class="no-agents" id="noAgentsMessage">No custom agents configured yet.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="setting-item">
+      <h2>Chat Font Size</h2>
+      <p>Adjust the font size for the chat messages in the popup.</p>
+      <div class="font-controls">
+        <button id="decreaseFont">-</button>
+        <span id="currentFontSizePreview">Normal</span> <!-- To show current size -->
+        <button id="increaseFont">+</button>
+      </div>
+    </div>
+
+    <!-- Add more settings here in the future -->
+
+  </div>
+  <script src="options.js"></script>
+</body>
+</html> 

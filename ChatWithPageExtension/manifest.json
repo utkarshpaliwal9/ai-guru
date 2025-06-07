@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Chat with Page Content",
+  "version": "1.0",
+  "description": "Ask questions about the content of the current webpage.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "options_page": "options.html",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+} 

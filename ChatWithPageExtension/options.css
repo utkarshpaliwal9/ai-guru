@@ -1,0 +1,391 @@
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  margin: 0;
+  padding: 20px;
+  background-color: #f4f7f6;
+  color: #333;
+  min-width: 400px;
+}
+
+.container {
+  max-width: 600px;
+  margin: 0 auto;
+  background-color: #fff;
+  padding: 20px 30px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+h1 {
+  color: #007bff;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-top: 0;
+}
+
+.setting-item {
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.setting-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.setting-item h2 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 1.2em;
+}
+
+.setting-item p {
+  font-size: 0.9em;
+  color: #555;
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+/* Credentials form styles */
+.credentials-form {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.input-group {
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.input-group label {
+  min-width: 80px;
+  font-weight: 500;
+  font-size: 0.9em;
+}
+
+.input-group input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,.25);
+}
+
+.input-group button {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8em;
+  min-width: 50px;
+}
+
+.input-group button:hover {
+  background-color: #5a6268;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}
+
+.button-group button {
+  padding: 10px 15px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+#saveCredentials {
+  background-color: #28a745;
+  color: white;
+}
+
+#saveCredentials:hover {
+  background-color: #218838;
+}
+
+#clearCredentials {
+  background-color: #dc3545;
+  color: white;
+}
+
+#clearCredentials:hover {
+  background-color: #c82333;
+}
+
+.status-message {
+  margin-top: 10px;
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  display: none;
+}
+
+.status-message.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+  display: block;
+}
+
+.status-message.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+  display: block;
+}
+
+/* Font controls styles */
+.font-controls {
+  display: flex;
+  align-items: center;
+}
+
+.font-controls button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  font-size: 1.5em;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.font-controls button:hover {
+  background-color: #0056b3;
+}
+
+.font-controls button:active {
+  background-color: #004085;
+}
+
+#currentFontSizePreview {
+  margin: 0 15px;
+  font-size: 1em;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* Agent management styles */
+.agents-form {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.agent-input-section, .agents-list-section {
+  margin-bottom: 20px;
+}
+
+.agent-input-section h3, .agents-list-section h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 1.1em;
+  color: #555;
+}
+
+.agents-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  background-color: #fff;
+}
+
+.agent-card {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background-color: #f8f9fa;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.agent-card:last-child {
+  margin-bottom: 0;
+}
+
+.agent-info {
+  flex-grow: 1;
+}
+
+.agent-name {
+  font-weight: bold;
+  color: #007bff;
+  margin-bottom: 2px;
+}
+
+.agent-endpoint {
+  font-size: 0.85em;
+  color: #666;
+  font-family: monospace;
+  word-break: break-all;
+}
+
+.agent-extra-fields {
+  font-size: 0.8em;
+  color: #888;
+  margin-top: 4px;
+  padding: 4px 8px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+  font-style: italic;
+}
+
+.agent-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.agent-actions button {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 0.8em;
+  transition: background-color 0.2s ease;
+}
+
+.edit-agent-btn {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.edit-agent-btn:hover {
+  background-color: #e0a800;
+}
+
+.delete-agent-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+.delete-agent-btn:hover {
+  background-color: #c82333;
+}
+
+.no-agents {
+  text-align: center;
+  color: #6c757d;
+  font-style: italic;
+  margin: 20px 0;
+}
+
+#addAgent {
+  background-color: #007bff;
+  color: white;
+}
+
+#addAgent:hover {
+  background-color: #0056b3;
+}
+
+#cancelEdit {
+  background-color: #6c757d;
+  color: white;
+}
+
+#cancelEdit:hover {
+  background-color: #5a6268;
+}
+
+/* Extra fields section styles */
+.extra-fields-section {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #ddd;
+}
+
+.extra-fields-section h4 {
+  margin-top: 0;
+  margin-bottom: 5px;
+  font-size: 1em;
+  color: #555;
+}
+
+.field-description {
+  font-size: 0.8em;
+  color: #666;
+  margin-bottom: 15px;
+  font-style: italic;
+}
+
+.extra-field-pair {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.extra-field-pair input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.extra-field-pair input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,.25);
+}
+
+.extra-field-pair .key-input {
+  max-width: 120px;
+}
+
+.remove-field-btn {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.8em;
+  min-width: 60px;
+}
+
+.remove-field-btn:hover {
+  background-color: #c82333;
+}
+
+.add-field-btn {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 0.9em;
+  margin-top: 5px;
+}
+
+.add-field-btn:hover {
+  background-color: #218838;
+} 
