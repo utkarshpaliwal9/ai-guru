@@ -147,6 +147,126 @@
   }
 }
 
+/* Markdown styling for messages */
+.markdown-user {
+  @apply text-white;
+}
+
+.markdown-user p {
+  @apply text-white;
+}
+
+.markdown-user strong {
+  @apply text-white font-semibold;
+}
+
+.markdown-user em {
+  @apply text-white italic;
+}
+
+.markdown-user code {
+  @apply bg-blue-600 bg-opacity-30 text-blue-100 px-1.5 py-0.5 rounded text-sm font-mono;
+}
+
+.markdown-user ul, .markdown-user ol {
+  @apply text-white;
+}
+
+.markdown-user li {
+  @apply text-white;
+}
+
+.markdown-user h1, .markdown-user h2, .markdown-user h3, 
+.markdown-user h4, .markdown-user h5, .markdown-user h6 {
+  @apply text-white font-bold;
+}
+
+.markdown-user a {
+  @apply text-blue-200 hover:text-blue-100 underline;
+}
+
+.markdown-user blockquote {
+  @apply border-l-4 border-blue-300 pl-4 py-2 mb-2 italic bg-blue-600 bg-opacity-20 rounded-r text-blue-100;
+}
+
+.markdown-user table {
+  @apply border-gray-300;
+}
+
+.markdown-user th {
+  @apply border-gray-300 bg-blue-600 bg-opacity-30 text-white;
+}
+
+.markdown-user td {
+  @apply border-gray-300 text-white;
+}
+
+/* Agent markdown styling (default colors) */
+.markdown-agent p {
+  @apply text-gray-900;
+}
+
+.markdown-agent code {
+  @apply bg-gray-100 text-red-600;
+}
+
+.markdown-agent pre {
+  @apply bg-gray-900 rounded-lg;
+}
+
+/* Code block enhancements */
+.hljs {
+  @apply rounded-lg !important;
+}
+
+/* Task list styling */
+.markdown-user li > span:first-child,
+.markdown-agent li > span:first-child {
+  @apply mr-2;
+}
+
+/* Strikethrough styling for user messages */
+.markdown-user del {
+  @apply line-through text-blue-200 opacity-75;
+}
+
+.markdown-agent del {
+  @apply line-through text-gray-500 opacity-75;
+}
+
+/* Table styling improvements */
+.markdown-user table,
+.markdown-agent table {
+  @apply text-sm mb-4;
+}
+
+.markdown-user tbody tr:nth-child(even),
+.markdown-agent tbody tr:nth-child(even) {
+  @apply bg-opacity-50;
+}
+
+.markdown-agent tbody tr:nth-child(even) {
+  @apply bg-gray-50;
+}
+
+.markdown-user tbody tr:nth-child(even) {
+  @apply bg-blue-600 bg-opacity-10;
+}
+
+/* Syntax highlighter overrides for better mobile experience */
+@media (max-width: 640px) {
+  .hljs {
+    font-size: 12px !important;
+    line-height: 1.4 !important;
+    padding: 12px !important;
+  }
+  
+  .markdown-user code, .markdown-agent code {
+    font-size: 12px !important;
+    padding: 2px 4px !important;
+  }
+}
+
 /* Enhanced focus styles for better accessibility */
 @layer base {
   *:focus {
