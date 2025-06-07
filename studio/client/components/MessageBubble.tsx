@@ -35,6 +35,9 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
     toast.success('Copied to clipboard!');
   };
 
+  const isUser = message.type === 'user';
+  const isAgent = message.type === 'agent';
+
   // Custom components for ReactMarkdown
   const markdownComponents = {
     // Code blocks with syntax highlighting and copy button
@@ -223,9 +226,6 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       </motion.div>
     );
   }
-
-  const isUser = message.type === 'user';
-  const isAgent = message.type === 'agent';
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
