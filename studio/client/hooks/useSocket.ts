@@ -35,8 +35,14 @@ export function useSocket(): UseSocketReturn {
       setIsConnected(false);
     });
 
-    socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error: any) => {
       console.error('❌ Connection error:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        description: error.description || 'No description',
+        context: error.context || 'No context',
+        type: error.type || 'Unknown type'
+      });
       setIsConnected(false);
     });
 

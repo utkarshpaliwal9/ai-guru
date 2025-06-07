@@ -60,12 +60,38 @@ export function handleSocketConnection(socket, io) {
 
       // Process message through base LLM (Alfa) with timeout
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('LLM response timeout')), 35000);
+        setTimeout(() => reject(new Error('LLM response timeout')), 30000);
       });
       
       const responsePromise = processBaseLLMResponse(conversation, content, io, conversationId);
       
-      await Promise.race([responsePromise, timeoutPromise]);
+      try {
+        await Promise.race([responsePromise, timeoutPromise]);
+      } catch (timeoutError) {
+        console.error('❌ LLM response timeout:', timeoutError.message);
+        
+        // Stop typing indicator on timeout
+        io.to(conversationId).emit('agent-typing', {
+          agentId: 'alfa-base',
+          agentName: 'Alfa',
+          isTyping: false
+        });
+
+        // Send timeout error message
+        const timeoutMessage = {
+          id: uuidv4(),
+          content: "⏰ I'm taking longer than usual to respond. This might be due to high server load or network issues. Please try again in a moment.",
+          sender: 'Alfa',
+          type: 'agent',
+          agentId: 'alfa-base',
+          timestamp: new Date().toISOString(),
+          isError: true
+        };
+
+        conversation.messages.push(timeoutMessage);
+        await saveConversation(conversation);
+        io.to(conversationId).emit('message-received', timeoutMessage);
+      }
 
     } catch (error) {
       console.error('❌ Error handling message:', error);

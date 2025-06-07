@@ -45,21 +45,32 @@ export class AlfaProvider extends BaseLLMProvider {
       }
 
       console.log(`🤖 Sending message to Alfa using OpenAI-compatible API`);
+      console.log(`📝 Message length: ${message.length} characters`);
 
       // Prepare messages in OpenAI format
       const messages = this.prepareMessages(message, context);
+      console.log(`📨 Prepared ${messages.length} messages for Alfa API`);
 
       // Use OpenAI-compatible chat completions endpoint
-      const response = await this.apiClient.post('/completions', {
+      const requestPayload = {
         model: this.config.model || 'gpt-4o-mini',
         messages: messages,
         max_tokens: this.config.maxTokens || 500,
         temperature: this.config.temperature || 0.7,
         stream: false // Start with non-streaming for simplicity
-      });
+      };
+
+      console.log(`🚀 Making request to ${this.config.chatHost}/completions`);
+      const startTime = Date.now();
+
+      const response = await this.apiClient.post('/completions', requestPayload);
+      
+      const duration = Date.now() - startTime;
+      console.log(`✅ Alfa API responded in ${duration}ms`);
 
       // Extract response content
       const content = response.data.choices?.[0]?.message?.content || 'No response from Alfa';
+      console.log(`📥 Received response: ${content.substring(0, 100)}${content.length > 100 ? '...' : ''}`);
 
       // Update conversation history
       this.conversationHistory.push(
@@ -72,7 +83,8 @@ export class AlfaProvider extends BaseLLMProvider {
         metadata: {
           model: response.data.model,
           usage: response.data.usage,
-          provider: 'alfa-openai-compatible'
+          provider: 'alfa-openai-compatible',
+          duration: duration
         }
       });
 
@@ -80,7 +92,13 @@ export class AlfaProvider extends BaseLLMProvider {
       console.error(`❌ Alfa provider error:`, error.response?.data || error.message);
       if (error.response) {
         console.error(`❌ Alfa API Status: ${error.response.status}`);
-        console.error(`❌ Alfa API Response:`, error.response.data);
+        console.error(`❌ Alfa API Response:`, JSON.stringify(error.response.data, null, 2));
+        console.error(`❌ Request URL: ${error.config?.url}`);
+        console.error(`❌ Request Headers:`, error.config?.headers);
+      } else if (error.code === 'ECONNABORTED') {
+        console.error(`❌ Request timeout - Alfa API took too long to respond`);
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        console.error(`❌ Network error - Cannot reach Alfa API at ${this.config.chatHost}`);
       }
       return this.standardizeError(error);
     }

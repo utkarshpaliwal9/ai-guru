@@ -1,0 +1,24 @@
+{
+  "watch": [
+    "index.js",
+    "services/**/*.js",
+    "routes/**/*.js",
+    "middleware/**/*.js",
+    "config/**/*.js"
+  ],
+  "ignore": [
+    "node_modules/",
+    "logs/",
+    "storage/**/*",
+    "data/**/*",
+    "storage/*.json",
+    "data/*.json",
+    "*.log",
+    "*.tmp",
+    ".env*"
+  ],
+  "ext": "js,json",
+  "delay": 2000,
+  "restartable": "rs",
+  "verbose": true
+} 
