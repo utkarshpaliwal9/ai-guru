@@ -79,4 +79,17 @@ io.on('connection', (socket) => {
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🔗 Socket.IO server ready for connections`);
+  
+  // Check Alfa AI configuration
+  const alfaRequiredVars = ['ALFA_AUTH_TOKEN', 'ALFA_PROJECT_ID', 'ALFA_CHAT_HOST', 'ALFA_API_HOST'];
+  const missingAlfaVars = alfaRequiredVars.filter(varName => !process.env[varName]);
+
+  if (missingAlfaVars.length > 0) {
+    console.warn('\n⚠️  WARNING: Alfa AI not configured!');
+    console.warn('Missing environment variables:', missingAlfaVars.join(', '));
+    console.warn('Chat functionality will be limited until Alfa AI is properly configured.');
+    console.warn('See server/.env.example or documentation for setup instructions.\n');
+  } else {
+    console.log('✅ Alfa AI configuration detected');
+  }
 }); 

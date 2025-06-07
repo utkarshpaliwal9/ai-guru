@@ -1,23 +1,43 @@
 # Agentic AI Chatbot Platform
 
-A powerful multi-agent AI chatbot platform with Model Context Protocol (MCP) integration, built with Next.js, React, Node.js, and Socket.IO.
+A powerful AI chatbot platform powered by **Avalara's Alfa AI** with specialized agent tools integration, built with Next.js, React, Node.js, and Socket.IO.
 
 ![Agentic AI Chatbot Platform](https://img.shields.io/badge/Platform-Agentic%20AI-blue?style=for-the-badge)
 ![React](https://img.shields.io/badge/Frontend-React%20%2B%20Next.js-blue)
 ![Node.js](https://img.shields.io/badge/Backend-Node.js%20%2B%20Express-green)
 ![TypeScript](https://img.shields.io/badge/Language-TypeScript-blue)
 
+## 🧠 How It Works
+
+**Alfa AI** is your primary conversational assistant that can call specialized tools on demand:
+
+1. **You** chat with **Alfa AI** (the base conversational AI)
+2. **Mention tools** with `@toolName` when you need specialized help
+3. **Alfa calls the tools**, gets their responses, and synthesizes them into the conversation
+4. **You get** a cohesive response from Alfa that includes tool insights
+
+**Example:**
+```
+You: "Hey Alfa, can you @weather check the forecast and @calendar see my meetings today?"
+
+Alfa: "I'll check both the weather and your calendar for you!"
+↳ Calls @weather tool → Gets: "Sunny, 75°F"
+↳ Calls @calendar tool → Gets: "3 meetings: 9am, 1pm, 4pm"
+↳ Responds: "Great news! It's sunny and 75°F today. You have 3 meetings scheduled..."
+```
+
 ## ✨ Features
 
-- **🤖 Multi-Agent Conversations**: Chat with multiple AI agents simultaneously using `@mentions`
+- **🧠 Alfa AI Base**: Powered by Avalara's enterprise Alfa AI as the primary conversational assistant
+- **🛠️ Tool Integration**: Call specialized tools with `@mentions` - Alfa handles the coordination  
 - **⚡ Real-time Communication**: Powered by Socket.IO for instant messaging and typing indicators
-- **🔧 Agent Management**: Create, configure, and manage AI agents with custom API endpoints
+- **🔧 Tool Management**: Create, configure, and manage specialized agent tools with custom APIs
 - **🎯 MCP Integration**: Support for Model Context Protocol servers (Playwright MCP, etc.)
-- **💬 Collaborative AI**: Agents can see and respond to each other's messages
-- **🎨 Beautiful UI**: Modern, responsive design with smooth animations
+- **🤝 Intelligent Synthesis**: Alfa combines tool responses into cohesive conversational answers
+- **🎨 Beautiful UI**: Modern, responsive design with smooth animations  
 - **📱 Responsive Design**: Works seamlessly on desktop, tablet, and mobile
 - **💾 File-based Storage**: Simple filesystem storage for easy deployment
-- **🔒 Secure**: API key protection and secure agent communication
+- **🔒 Secure**: API key protection and secure tool communication
 
 ## 🏗️ Architecture
 
@@ -105,19 +125,40 @@ All mentioned agents will respond and can see each other's responses, enabling c
 
 ### Environment Variables
 
-Create these files with your configuration:
+**⚠️ Important: Alfa AI Configuration Required**
 
-**`server/.env`**
+This platform requires **Avalara's Alfa AI** credentials to function. Without these credentials, the chat functionality will not work.
+
+**`server/.env`** (Required):
 ```env
+# Server Configuration
 PORT=5000
 NODE_ENV=development
+
+# Alfa AI Configuration (REQUIRED)
+ALFA_AUTH_TOKEN=your-auth-token-here
+ALFA_PROJECT_ID=your-project-uuid-here
+ALFA_CHAT_HOST=https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io
+ALFA_API_HOST=https://clip-api.gamma.qa.us-west-2.aws.avalara.io
+ALFA_MODEL=gpt-4o-mini
 ```
 
-**`client/.env.local`**
+**`client/.env.local`**:
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:5000
 NEXT_PUBLIC_SOCKET_URL=http://localhost:5000
 ```
+
+**🔑 Getting Alfa AI Credentials:**
+1. Contact your **Avalara administrator**
+2. Request access to **Alfa AI** for your project
+3. Obtain the `AUTH_TOKEN` and `PROJECT_ID`
+4. Update your `server/.env` file with the credentials
+
+**⚠️ What happens without Alfa credentials:**
+- Server will show warning on startup
+- Chat attempts will display configuration error messages
+- Agent tools management will still work (for when you get credentials)
 
 ### Agent Configuration Examples
 

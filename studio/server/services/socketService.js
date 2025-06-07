@@ -5,6 +5,7 @@ import {
   getAllAgents 
 } from '../utils/storage.js';
 import { callAgentAPI } from './agentService.js';
+import { baseLLMService } from './baseLLMService.js';
 import { v4 as uuidv4 } from 'uuid';
 
 export function handleSocketConnection(socket, io) {
@@ -22,7 +23,7 @@ export function handleSocketConnection(socket, io) {
     console.log(`👋 Socket ${socket.id} left conversation ${conversationId}`);
   });
 
-  // Handle user message and trigger agent responses
+  // Handle user message and send to base LLM (Alfa)
   socket.on('send-message', async (data) => {
     try {
       const { conversationId, content, sender = 'user' } = data;
@@ -50,43 +51,18 @@ export function handleSocketConnection(socket, io) {
       // Broadcast user message to all clients in the conversation
       io.to(conversationId).emit('message-received', userMessage);
 
-      // Parse mentioned agents from the message (e.g., @agent1 @agent2)
-      const mentionedAgents = parseMentionedAgents(content);
-      
-      // If no agents mentioned, use all active agents in the conversation
-      let agentsToInvoke = mentionedAgents.length > 0 ? mentionedAgents : conversation.agents || [];
-      
-      // Filter for active agents only
-      const allAgents = await getAllAgents();
-      const activeAgents = allAgents.filter(agent => 
-        agent.isActive && agentsToInvoke.includes(agent.name)
-      );
-
-      if (activeAgents.length === 0) {
-        console.log('No active agents to invoke');
-        return;
-      }
-
-      // Show typing indicator for all agents that will respond
-      activeAgents.forEach(agent => {
-        io.to(conversationId).emit('agent-typing', {
-          agentId: agent.id,
-          agentName: agent.name,
-          isTyping: true
-        });
+      // Show typing indicator for Alfa
+      io.to(conversationId).emit('agent-typing', {
+        agentId: 'alfa-base',
+        agentName: 'Alfa',
+        isTyping: true
       });
 
-      // Process agents in parallel for collaborative conversation
-      await processCollaborativeAgentResponses(
-        activeAgents, 
-        conversation, 
-        content, 
-        io, 
-        conversationId
-      );
+      // Process message through base LLM (Alfa)
+      await processBaseLLMResponse(conversation, content, io, conversationId);
 
     } catch (error) {
-      console.error('Error handling message:', error);
+      console.error('❌ Error handling message:', error);
       socket.emit('error', { message: 'Failed to process message' });
     }
   });
@@ -103,107 +79,89 @@ export function handleSocketConnection(socket, io) {
   });
 }
 
-// Parse @mentions from message content
-function parseMentionedAgents(content) {
-  const mentionRegex = /@(\w+)/g;
-  const mentions = [];
-  let match;
-  
-  while ((match = mentionRegex.exec(content)) !== null) {
-    mentions.push(match[1]);
-  }
-  
-  return mentions;
-}
-
-// Process collaborative agent responses
-async function processCollaborativeAgentResponses(agents, conversation, userMessage, io, conversationId) {
-  const agentPromises = agents.map(async (agent) => {
-    try {
-      // Prepare context for the agent including previous messages
-      const context = prepareAgentContext(conversation, agent, userMessage);
-      
-      // Call the agent API
-      const response = await callAgentAPI(agent, context);
-      
-      // Create agent message
-      const agentMessage = {
-        id: uuidv4(),
-        content: response.content || response.message || 'Agent response received',
-        sender: agent.name,
-        type: 'agent',
-        agentId: agent.id,
-        timestamp: new Date().toISOString(),
-        metadata: response.metadata || {}
-      };
-
-      // Add agent message to conversation
-      conversation.messages.push(agentMessage);
-      
-      // Stop typing indicator
-      io.to(conversationId).emit('agent-typing', {
-        agentId: agent.id,
-        agentName: agent.name,
-        isTyping: false
-      });
-
-      // Broadcast agent message
-      io.to(conversationId).emit('message-received', agentMessage);
-
-      return agentMessage;
-    } catch (error) {
-      console.error(`Error processing agent ${agent.name}:`, error);
-      
-      // Stop typing indicator on error
-      io.to(conversationId).emit('agent-typing', {
-        agentId: agent.id,
-        agentName: agent.name,
-        isTyping: false
-      });
-
-      // Send error message
-      const errorMessage = {
-        id: uuidv4(),
-        content: `Sorry, I encountered an error processing your request.`,
-        sender: agent.name,
-        type: 'agent',
-        agentId: agent.id,
-        timestamp: new Date().toISOString(),
-        isError: true
-      };
-
-      conversation.messages.push(errorMessage);
-      io.to(conversationId).emit('message-received', errorMessage);
-
-      return errorMessage;
-    }
-  });
-
-  // Wait for all agents to respond
-  const responses = await Promise.allSettled(agentPromises);
-  
-  // Save updated conversation
-  await saveConversation(conversation);
-
-  console.log(`✅ Processed ${responses.length} agent responses for conversation ${conversationId}`);
-}
-
-// Prepare context for agent including conversation history
-function prepareAgentContext(conversation, agent, currentMessage) {
-  const recentMessages = conversation.messages.slice(-10); // Last 10 messages for context
-  
-  const context = {
-    currentMessage,
-    conversationHistory: recentMessages.map(msg => ({
+// Process message through base LLM (Alfa)
+async function processBaseLLMResponse(conversation, userMessage, io, conversationId) {
+  try {
+    // Prepare conversation history for base LLM
+    const conversationHistory = conversation.messages.map(msg => ({
       sender: msg.sender,
       content: msg.content,
       timestamp: msg.timestamp,
       type: msg.type
-    })),
-    agentConfiguration: agent.configuration || {},
-    conversationId: conversation.id,
-    timestamp: new Date().toISOString()
-  };
+    }));
 
-  return context;
+    // Get response from base LLM (Alfa)
+    const response = await baseLLMService.processMessage(
+      userMessage, 
+      conversationHistory, 
+      conversationId
+    );
+
+    // Create Alfa response message
+    const alfaMessage = {
+      id: uuidv4(),
+      content: response.content,
+      sender: 'Alfa',
+      type: 'agent',
+      agentId: 'alfa-base',
+      timestamp: new Date().toISOString(),
+      metadata: response.metadata || {}
+    };
+
+    // Add Alfa message to conversation
+    conversation.messages.push(alfaMessage);
+    await saveConversation(conversation);
+
+    // Stop typing indicator
+    io.to(conversationId).emit('agent-typing', {
+      agentId: 'alfa-base',
+      agentName: 'Alfa',
+      isTyping: false
+    });
+
+    // Broadcast Alfa message
+    io.to(conversationId).emit('message-received', alfaMessage);
+
+    // Log successful processing
+    const agentsCalled = response.metadata?.agentsCalled || [];
+    if (agentsCalled.length > 0) {
+      console.log(`✅ Alfa processed message and called agents: ${agentsCalled.join(', ')}`);
+    } else {
+      console.log(`✅ Alfa processed message (no agents called)`);
+    }
+
+  } catch (error) {
+    console.error('❌ Error processing base LLM response:', error);
+    
+    // Stop typing indicator on error
+    io.to(conversationId).emit('agent-typing', {
+      agentId: 'alfa-base',
+      agentName: 'Alfa',
+      isTyping: false
+    });
+
+    // Different error messages based on error type
+    let errorContent = `I apologize, but I'm experiencing technical difficulties. Please try again.`;
+    
+    if (error.message.includes('Alfa AI credentials not configured')) {
+      errorContent = `🚫 Alfa AI is not configured on this server. Please contact your administrator to set up the required Alfa AI credentials.`;
+    } else if (error.message.includes('Failed to initialize Alfa AI')) {
+      errorContent = `❌ Unable to connect to Alfa AI. Please check the server configuration and try again.`;
+    }
+
+    // Send error message
+    const errorMessage = {
+      id: uuidv4(),
+      content: errorContent,
+      sender: 'Alfa',
+      type: 'agent',
+      agentId: 'alfa-base',
+      timestamp: new Date().toISOString(),
+      isError: true
+    };
+
+    conversation.messages.push(errorMessage);
+    await saveConversation(conversation);
+    io.to(conversationId).emit('message-received', errorMessage);
+  }
 } 

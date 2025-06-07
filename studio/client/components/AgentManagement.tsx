@@ -223,8 +223,8 @@ export default function AgentManagement() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Agent Management</h1>
-          <p className="text-gray-600 mt-2">Create and manage AI agents for conversations</p>
+          <h1 className="text-3xl font-bold text-gray-900">Agent Tools Management</h1>
+          <p className="text-gray-600 mt-2">Create and manage specialized tools that Alfa can call during conversations</p>
         </div>
         <button
           onClick={openCreateForm}
@@ -327,17 +327,17 @@ export default function AgentManagement() {
           className="text-center py-16"
         >
           <Bot className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Agents Created</h3>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Agent Tools Created</h3>
           <p className="text-gray-600 mb-8 max-w-md mx-auto">
-            Create your first AI agent to start building conversational experiences. 
-            Agents can connect to different AI models and services.
+            Create your first agent tool for Alfa to use. Tools are specialized services
+            that Alfa can call when mentioned with @ in conversations.
           </p>
           <button
             onClick={openCreateForm}
             className="btn-primary"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Create Your First Agent
+            Create Your First Tool
           </button>
         </motion.div>
       )}

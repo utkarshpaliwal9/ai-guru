@@ -122,10 +122,10 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
       sender: 'user'
     });
 
-    // Show toast for mentioned agents
+    // Show toast for mentioned tools
     const mentionedAgents = messageContent.match(/@(\w+)/g);
     if (mentionedAgents && mentionedAgents.length > 0) {
-      toast.success(`Mentioned ${mentionedAgents.length} agent(s): ${mentionedAgents.join(', ')}`);
+      toast.success(`Alfa will call ${mentionedAgents.length} tool(s): ${mentionedAgents.join(', ')}`);
     }
   };
 
@@ -151,7 +151,7 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
           <Bot className="w-16 h-16 text-gray-400 mx-auto mb-4" />
           <h3 className="text-xl font-semibold text-gray-900 mb-2">No Conversation Selected</h3>
           <p className="text-gray-600 mb-6">
-            Select a conversation from the sidebar or create a new one to start chatting with AI agents.
+            Select a conversation from the sidebar or create a new one to start chatting with Alfa AI.
           </p>
         </motion.div>
       </div>
@@ -168,9 +168,9 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
               <Bot className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Multi-Agent Chat</h2>
+              <h2 className="text-lg font-semibold text-gray-900">Alfa AI Assistant</h2>
               <p className="text-sm text-gray-500">
-                Use @agentName to mention specific agents
+                Powered by Avalara's Alfa AI • Use @agentName to call specialized tools
               </p>
             </div>
           </div>
@@ -224,7 +224,7 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message... Use @agentName to mention agents"
+              placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               disabled={isLoading}
             />
