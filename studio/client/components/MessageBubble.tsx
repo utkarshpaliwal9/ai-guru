@@ -4,7 +4,7 @@ import { Bot, User, AlertCircle, Clock, Copy, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
+import { oneLight, oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { toast } from 'react-hot-toast';
 
 interface Message {
@@ -47,16 +47,25 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           <div className="relative group">
             <button
               onClick={() => copyToClipboard(codeContent)}
-              className="absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-gray-700 hover:bg-gray-600 text-white"
+              className={`absolute top-2 right-2 p-1.5 rounded opacity-0 group-hover:opacity-100 transition-opacity ${
+                isUser 
+                  ? 'bg-blue-600 hover:bg-blue-500 text-white' 
+                  : 'bg-gray-700 hover:bg-gray-600 text-white'
+              }`}
               title="Copy code"
             >
               <Copy className="w-3 h-3" />
             </button>
             <SyntaxHighlighter
-              style={vscDarkPlus}
+              style={isUser ? oneDark : oneLight}
               language={match[1]}
               PreTag="div"
               className="rounded-lg text-sm"
+              customStyle={{
+                margin: 0,
+                borderRadius: '0.5rem',
+                backgroundColor: isUser ? '#1e293b' : '#f8fafc'
+              }}
               {...props}
             >
               {codeContent}
@@ -68,7 +77,11 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
       // Inline code
       return (
         <code 
-          className="bg-gray-100 text-red-600 px-1.5 py-0.5 rounded text-sm font-mono" 
+          className={`px-1.5 py-0.5 rounded text-sm font-mono ${
+            isUser 
+              ? 'bg-blue-600 bg-opacity-30 text-blue-100' 
+              : 'bg-gray-100 text-red-600'
+          }`}
           {...props}
         >
           {children}

@@ -211,7 +211,11 @@
 }
 
 .markdown-agent pre {
-  @apply bg-gray-900 rounded-lg;
+  @apply bg-gray-50 rounded-lg border border-gray-200;
+}
+
+.markdown-user pre {
+  @apply bg-slate-800 rounded-lg;
 }
 
 /* Code block enhancements */
