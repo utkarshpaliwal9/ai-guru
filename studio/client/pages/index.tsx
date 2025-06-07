@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { MessageCircle, Settings, Plus, Users } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Users, Menu, X } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import AgentManagement from '@/components/AgentManagement';
 import ConversationList from '@/components/ConversationList';
@@ -13,6 +13,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isChatSidebarCollapsed, setIsChatSidebarCollapsed] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { socket, isConnected } = useSocket();
 
   // Handle conversation selection - convert empty string to null for consistency
@@ -30,10 +31,28 @@ export default function Home() {
       </Head>
 
       <div className="h-screen bg-gray-50 flex overflow-hidden">
+        {/* Mobile Header */}
+        <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h1 className="text-lg font-bold text-gray-900">AI Guru</h1>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+          >
+            {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+
         {/* Sidebar */}
-        <div className="w-64 bg-white shadow-lg flex flex-col">
-          {/* Header */}
-          <div className="p-6 border-b border-gray-200">
+        <div className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:relative z-40 w-64 bg-white shadow-lg flex flex-col transition-transform duration-300 ease-in-out md:shadow-lg`}>
+          {/* Header - Hidden on mobile (shown in mobile header) */}
+          <div className="hidden md:block p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
                 <MessageCircle className="w-6 h-6 text-white" />
@@ -46,11 +65,12 @@ export default function Home() {
           </div>
 
           {/* Navigation */}
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-4 space-y-2 mt-16 md:mt-0">
             <button
               onClick={() => {
                 setActiveTab('chat');
                 setIsChatSidebarCollapsed(!isChatSidebarCollapsed);
+                setIsMobileMenuOpen(false); // Close mobile menu
               }}
               className={`sidebar-item w-full ${
                 activeTab === 'chat' ? 'sidebar-item-active' : 'sidebar-item-inactive'
@@ -61,7 +81,10 @@ export default function Home() {
             </button>
             
             <button
-              onClick={() => setActiveTab('agents')}
+              onClick={() => {
+                setActiveTab('agents');
+                setIsMobileMenuOpen(false); // Close mobile menu
+              }}
               className={`sidebar-item w-full ${
                 activeTab === 'agents' ? 'sidebar-item-active' : 'sidebar-item-inactive'
               }`}
@@ -71,7 +94,10 @@ export default function Home() {
             </button>
             
             <button
-              onClick={() => setActiveTab('mcp')}
+              onClick={() => {
+                setActiveTab('mcp');
+                setIsMobileMenuOpen(false); // Close mobile menu
+              }}
               className={`sidebar-item w-full ${
                 activeTab === 'mcp' ? 'sidebar-item-active' : 'sidebar-item-inactive'
               }`}
@@ -92,13 +118,21 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Mobile Overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-30"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
+
         {/* Main Content */}
-        <div className="flex-1 flex">
+        <div className="flex-1 flex pt-16 md:pt-0 ml-0 md:ml-0">
           {activeTab === 'chat' && (
             <>
-              {/* Conversation List - Collapsible */}
+              {/* Conversation List - Responsive */}
               {!isChatSidebarCollapsed && (
-                <div className="w-80 bg-white border-r border-gray-200">
+                <div className="hidden lg:block w-80 xl:w-96 bg-white border-r border-gray-200">
                   <ConversationList
                     currentConversationId={currentConversationId}
                     onConversationSelect={handleConversationSelect}
@@ -107,7 +141,7 @@ export default function Home() {
               )}
               
               {/* Chat Interface */}
-              <div className="flex-1">
+              <div className="flex-1 min-w-0">
                 <ChatInterface
                   conversationId={currentConversationId}
                   socket={socket}
@@ -117,25 +151,25 @@ export default function Home() {
           )}
 
           {activeTab === 'agents' && (
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <AgentManagement />
             </div>
           )}
 
           {activeTab === 'mcp' && (
-            <div className="flex-1 p-8">
+            <div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-4xl mx-auto"
               >
                 <div className="text-center">
-                  <Settings className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">MCP Server Management</h2>
-                  <p className="text-gray-600 mb-8">
+                  <Settings className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">MCP Server Management</h2>
+                  <p className="text-sm sm:text-base text-gray-600 mb-6 sm:mb-8 px-4">
                     Configure and manage Model Context Protocol servers for your agents.
                   </p>
-                  <button className="btn-primary">
+                  <button className="btn-primary text-sm sm:text-base">
                     <Plus className="w-4 h-4 mr-2" />
                     Add MCP Server
                   </button>

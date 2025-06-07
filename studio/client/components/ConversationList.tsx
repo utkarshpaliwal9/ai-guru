@@ -107,10 +107,10 @@ export default function ConversationList({
 
   if (isLoading) {
     return (
-      <div className="p-4">
-        <div className="animate-pulse space-y-4">
+      <div className="p-3 sm:p-4">
+        <div className="animate-pulse space-y-3 sm:space-y-4">
           {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-gray-200 rounded-lg"></div>
+            <div key={i} className="h-14 sm:h-16 bg-gray-200 rounded-lg"></div>
           ))}
         </div>
       </div>
@@ -119,10 +119,10 @@ export default function ConversationList({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-3 sm:p-4 border-b border-gray-200">
         <button
           onClick={createNewConversation}
-          className="w-full btn-primary flex items-center justify-center"
+          className="w-full btn-primary flex items-center justify-center text-sm sm:text-base py-2 sm:py-2"
         >
           <Plus className="w-4 h-4 mr-2" />
           New Chat
@@ -131,9 +131,9 @@ export default function ConversationList({
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {conversations.length === 0 ? (
-          <div className="p-8 text-center">
-            <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500 text-sm">No conversations yet</p>
+          <div className="p-6 sm:p-8 text-center">
+            <MessageCircle className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500 text-xs sm:text-sm">No conversations yet</p>
           </div>
         ) : (
           <div className="p-2 space-y-1">
@@ -144,7 +144,7 @@ export default function ConversationList({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 onClick={() => onConversationSelect(conversation.id)}
-                className={`group relative p-3 rounded-lg cursor-pointer transition-colors ${
+                className={`group relative p-2 sm:p-3 rounded-lg cursor-pointer transition-colors ${
                   currentConversationId === conversation.id
                     ? 'bg-primary-50 border border-primary-200'
                     : 'hover:bg-gray-50'
@@ -152,7 +152,7 @@ export default function ConversationList({
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-medium text-gray-900 truncate pr-8">
+                    <h3 className="text-xs sm:text-sm font-medium text-gray-900 truncate pr-6 sm:pr-8">
                       {conversation.title}
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">
@@ -162,7 +162,7 @@ export default function ConversationList({
                   
                   <button
                     onClick={(e) => deleteConversation(conversation.id, conversation.title, e)}
-                    className="absolute top-3 right-3 p-1 opacity-0 group-hover:opacity-100 hover:bg-red-100 rounded transition-all duration-200"
+                    className="absolute top-2 right-2 sm:top-3 sm:right-3 p-1 opacity-0 group-hover:opacity-100 hover:bg-red-100 rounded transition-all duration-200"
                     title="Delete conversation"
                   >
                     <Trash2 className="w-3 h-3 text-red-500 hover:text-red-700" />

@@ -113,4 +113,47 @@
 /* Mention highlighting */
 .mention {
   @apply bg-primary-100 text-primary-800 px-1 rounded;
+}
+
+/* Responsive utilities */
+@layer utilities {
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  
+  /* Mobile-specific enhancements */
+  @media (max-width: 768px) {
+    .mobile-full-height {
+      height: calc(100vh - 4rem);
+    }
+    
+    .mobile-sidebar {
+      height: 100vh;
+      top: 0;
+      left: 0;
+    }
+  }
+  
+  /* Tablet and desktop */
+  @media (min-width: 769px) {
+    .desktop-sidebar {
+      position: relative;
+      transform: translateX(0) !important;
+    }
+  }
+}
+
+/* Enhanced focus styles for better accessibility */
+@layer base {
+  *:focus {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+  
+  input:focus, textarea:focus, select:focus {
+    @apply ring-primary-500 border-primary-500;
+  }
 } 
