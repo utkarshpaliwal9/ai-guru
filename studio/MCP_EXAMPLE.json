@@ -1,0 +1,19 @@
+{
+  "name": "filesystem-agent",
+  "description": "An agent that can interact with the file system",
+  "command": "npx",
+  "args": [
+    "@modelcontextprotocol/server-filesystem",
+    "/path/to/allowed/directory"
+  ],
+  "env": {
+    "NODE_ENV": "production"
+  },
+  "capabilities": [
+    "read_file",
+    "write_file",
+    "list_directory",
+    "create_directory"
+  ],
+  "transport": "stdio"
+} 

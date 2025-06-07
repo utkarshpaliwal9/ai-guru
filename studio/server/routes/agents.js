@@ -44,6 +44,7 @@ router.post('/', async (req, res) => {
       apiKey, 
       configuration = {},
       mcpServerId = null,
+      mcpConfig = null, // Add MCP config support
       providerType = 'openai', // New field for provider type
       isActive = true
     } = req.body;
@@ -54,11 +55,11 @@ router.post('/', async (req, res) => {
       });
     }
 
-    // For backward compatibility, still allow apiEndpoint
-    // But prefer provider-based configuration
-    if (!providerType && !apiEndpoint) {
+    // For MCP agents, we don't require API endpoint
+    // For traditional agents, require either providerType or apiEndpoint
+    if (!mcpConfig && !providerType && !apiEndpoint) {
       return res.status(400).json({ 
-        error: 'Either providerType or apiEndpoint is required' 
+        error: 'Either MCP configuration, providerType, or apiEndpoint is required' 
       });
     }
 
@@ -69,7 +70,8 @@ router.post('/', async (req, res) => {
       apiKey: apiKey || '',
       configuration,
       mcpServerId,
-      providerType, // New field
+      mcpConfig, // Add MCP config field
+      providerType: mcpConfig ? 'mcp' : providerType, // Set provider type to MCP if config is provided
       isActive,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

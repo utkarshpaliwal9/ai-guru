@@ -1,11 +1,17 @@
 import { providerFactory } from './providers/ProviderFactory.js';
+import { mcpService } from './mcpService.js';
 
-// Call an agent's API using the provider system
+// Call an agent's API using the provider system or MCP
 export async function callAgentAPI(agent, context) {
   try {
     console.log(`🤖 Calling agent: ${agent.name}`);
     
-    // Get or create provider for this agent
+    // Check if agent uses MCP
+    if (agent.mcpConfig && agent.providerType === 'mcp') {
+      return await callMCPAgent(agent, context);
+    }
+    
+    // Use traditional provider system
     let provider = providerFactory.getProvider(agent.name);
     
     if (!provider) {
@@ -55,12 +61,56 @@ export async function callAgentAPI(agent, context) {
   }
 }
 
-// Test agent connection using provider system
+// Call MCP agent
+async function callMCPAgent(agent, context) {
+  try {
+    // Initialize MCP connection if not already connected
+    if (!mcpService.isConnected(agent.id)) {
+      await mcpService.initializeAgent(agent);
+    }
+    
+    // Send message to MCP agent
+    const response = await mcpService.sendMessage(agent.id, context.currentMessage, {
+      conversationHistory: context.conversationHistory || [],
+      timestamp: context.timestamp,
+      agentConfiguration: context.agentConfiguration
+    });
+    
+    console.log(`✅ Agent ${agent.name} responded via MCP`);
+    
+    return {
+      content: response.content,
+      metadata: {
+        agentId: agent.id,
+        agentName: agent.name,
+        provider: 'mcp',
+        success: response.success,
+        ...response.metadata
+      }
+    };
+
+  } catch (error) {
+    console.error(`❌ Error calling MCP agent ${agent.name}:`, error.message);
+    throw new Error(`Failed to communicate with MCP agent ${agent.name}: ${error.message}`);
+  }
+}
+
+// Test agent connection using provider system or MCP
 export async function testAgentConnection(agent) {
   try {
     console.log(`🔍 Testing connection to agent: ${agent.name}`);
     
-    // Get or create provider for testing
+    // Check if agent uses MCP
+    if (agent.mcpConfig && agent.providerType === 'mcp') {
+      const result = await mcpService.testConnection(agent);
+      return {
+        ...result,
+        provider: 'mcp',
+        capabilities: result.tools || []
+      };
+    }
+    
+    // Use traditional provider system
     let provider = providerFactory.getProvider(agent.name);
     
     if (!provider) {
