@@ -23,6 +23,15 @@ interface AgentTyping {
   isTyping: boolean;
 }
 
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  isActive: boolean;
+  providerType: string;
+  mcpConfig?: any;
+}
+
 interface ChatInterfaceProps {
   conversationId: string | null;
   socket: Socket | null;
@@ -33,6 +42,9 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [typingAgents, setTypingAgents] = useState<AgentTyping[]>([]);
+  const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
+  const [showAgentSuggestions, setShowAgentSuggestions] = useState(false);
+  const [agentSuggestions, setAgentSuggestions] = useState<Agent[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -95,6 +107,23 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
     loadConversationHistory(conversationId);
   }, [conversationId]);
 
+  // Load available agents
+  useEffect(() => {
+    loadAvailableAgents();
+  }, []);
+
+  const loadAvailableAgents = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents`);
+      if (response.ok) {
+        const agents = await response.json();
+        setAvailableAgents(agents.filter((agent: Agent) => agent.isActive));
+      }
+    } catch (error) {
+      console.error('Error loading agents:', error);
+    }
+  };
+
   const loadConversationHistory = async (convId: string) => {
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/${convId}`);
@@ -108,12 +137,53 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
     }
   };
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setInputMessage(value);
+
+    // Check for agent mentions
+    const lastAtIndex = value.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const afterAt = value.substring(lastAtIndex + 1);
+      const spaceIndex = afterAt.indexOf(' ');
+      const searchTerm = spaceIndex === -1 ? afterAt : afterAt.substring(0, spaceIndex);
+      
+      if (searchTerm.length > 0 && spaceIndex === -1) {
+        // Show suggestions
+        const filtered = availableAgents.filter(agent => 
+          agent.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setAgentSuggestions(filtered);
+        setShowAgentSuggestions(filtered.length > 0);
+      } else {
+        setShowAgentSuggestions(false);
+      }
+    } else {
+      setShowAgentSuggestions(false);
+    }
+  };
+
+  const selectAgent = (agent: Agent) => {
+    const lastAtIndex = inputMessage.lastIndexOf('@');
+    if (lastAtIndex !== -1) {
+      const beforeAt = inputMessage.substring(0, lastAtIndex);
+      const afterAt = inputMessage.substring(lastAtIndex + 1);
+      const spaceIndex = afterAt.indexOf(' ');
+      const afterMention = spaceIndex === -1 ? '' : afterAt.substring(spaceIndex);
+      
+      setInputMessage(`${beforeAt}@${agent.name}${afterMention}`);
+      setShowAgentSuggestions(false);
+      inputRef.current?.focus();
+    }
+  };
+
   const sendMessage = () => {
     if (!inputMessage.trim() || !socket || !conversationId) return;
 
     const messageContent = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
+    setShowAgentSuggestions(false);
 
     // Send message via socket
     socket.emit('send-message', {
@@ -130,6 +200,26 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (showAgentSuggestions && agentSuggestions.length > 0) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        // Handle arrow key navigation for agent suggestions
+        // For simplicity, we'll just select the first suggestion on Enter
+        return;
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        if (agentSuggestions.length > 0) {
+          selectAgent(agentSuggestions[0]);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowAgentSuggestions(false);
+        return;
+      }
+    }
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       sendMessage();
@@ -220,19 +310,48 @@ export default function ChatInterface({ conversationId, socket }: ChatInterfaceP
       {/* Input */}
       <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
         <div className="flex items-end space-x-2 sm:space-x-3">
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <input
               ref={inputRef}
               type="text"
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyPress={handleKeyPress}
               placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
               className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none"
               disabled={isLoading}
             />
+            
+            {/* Agent Suggestions Dropdown */}
+            {showAgentSuggestions && agentSuggestions.length > 0 && (
+              <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
+                {agentSuggestions.map((agent) => (
+                  <button
+                    key={agent.id}
+                    onClick={() => selectAgent(agent)}
+                    className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center space-x-2 border-b border-gray-100 last:border-b-0"
+                  >
+                    <Bot className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">@{agent.name}</div>
+                      <div className="text-xs text-gray-500 truncate">{agent.description}</div>
+                    </div>
+                    <div className="ml-auto">
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        agent.providerType === 'mcp' 
+                          ? 'bg-blue-100 text-blue-800' 
+                          : 'bg-green-100 text-green-800'
+                      }`}>
+                        {agent.providerType === 'mcp' ? 'MCP' : 'API'}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            
             <div className="mt-1 sm:mt-2 text-xs text-gray-500 hidden sm:block">
-              Press Enter to send, Shift+Enter for new line
+              Press Enter to send, Shift+Enter for new line • Type @ to mention agents
             </div>
           </div>
           <button

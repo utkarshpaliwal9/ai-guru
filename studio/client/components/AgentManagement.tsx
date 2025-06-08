@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Bot, Edit3, Trash2, Settings, Save, X } from 'lucide-react';
+import { Plus, Bot, Edit3, Trash2, Settings, Save, X, Upload, FileText } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Agent {
@@ -11,6 +11,7 @@ interface Agent {
   apiKey: string;
   configuration: Record<string, any>;
   mcpServerId?: string;
+  mcpConfig?: any; // Add MCP config field
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -35,6 +36,8 @@ export default function AgentManagement() {
     apiKey: '',
   });
   const [configPairs, setConfigPairs] = useState<ConfigPair[]>([{ key: '', value: '' }]);
+  const [mcpConfigFile, setMcpConfigFile] = useState<File | null>(null);
+  const [mcpConfig, setMcpConfig] = useState<any>(null);
 
   useEffect(() => {
     loadAgents();
@@ -63,6 +66,8 @@ export default function AgentManagement() {
       apiKey: '',
     });
     setConfigPairs([{ key: '', value: '' }]);
+    setMcpConfigFile(null);
+    setMcpConfig(null);
     setEditingAgent(null);
   };
 
@@ -85,6 +90,11 @@ export default function AgentManagement() {
       value: String(value)
     }));
     setConfigPairs(pairs.length > 0 ? pairs : [{ key: '', value: '' }]);
+    
+    // Set MCP config if available
+    if (agent.mcpConfig) {
+      setMcpConfig(agent.mcpConfig);
+    }
     
     setEditingAgent(agent);
     setShowCreateForm(true);
@@ -109,9 +119,53 @@ export default function AgentManagement() {
     setConfigPairs(updated);
   };
 
+  const handleMcpFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.name.endsWith('.json')) {
+      toast.error('Please upload a JSON configuration file');
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const config = JSON.parse(text);
+      
+      // Basic validation for MCP config
+      if (!config.mcpServers && !config.server && !config.name) {
+        toast.error('Invalid MCP configuration file format');
+        return;
+      }
+
+      setMcpConfigFile(file);
+      setMcpConfig(config);
+      
+      // Auto-populate fields if available
+      if (config.name && !formData.name) {
+        setFormData(prev => ({ ...prev, name: config.name }));
+      }
+      if (config.description && !formData.description) {
+        setFormData(prev => ({ ...prev, description: config.description }));
+      }
+
+      toast.success('MCP configuration loaded successfully');
+    } catch (error) {
+      console.error('Error parsing MCP config:', error);
+      toast.error('Failed to parse MCP configuration file');
+    }
+  };
+
   const saveAgent = async () => {
-    if (!formData.name || !formData.apiEndpoint) {
-      toast.error('Name and API endpoint are required');
+    if (!formData.name) {
+      toast.error('Agent name is required');
+      return;
+    }
+
+    // For MCP agents, we don't require API endpoint if MCP config is provided
+    if (!mcpConfig && !formData.apiEndpoint) {
+      toast.error('Either API endpoint or MCP configuration is required');
       return;
     }
 
@@ -126,6 +180,7 @@ export default function AgentManagement() {
     const agentData = {
       ...formData,
       configuration,
+      mcpConfig,
     };
 
     try {
@@ -184,6 +239,30 @@ export default function AgentManagement() {
     } catch (error) {
       console.error('Error deleting agent:', error);
       toast.error('Failed to delete agent');
+    }
+  };
+
+  const testAgent = async (agentId: string) => {
+    try {
+      toast.loading('Testing agent connection...', { id: 'test-agent' });
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/agents/${agentId}/test`, {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          toast.success(`Connection successful! ${result.toolsCount ? `Found ${result.toolsCount} tools` : ''}`, { id: 'test-agent' });
+        } else {
+          toast.error(`Connection failed: ${result.message}`, { id: 'test-agent' });
+        }
+      } else {
+        toast.error('Failed to test agent connection', { id: 'test-agent' });
+      }
+    } catch (error) {
+      console.error('Error testing agent:', error);
+      toast.error('Failed to test agent connection', { id: 'test-agent' });
     }
   };
 
@@ -257,6 +336,13 @@ export default function AgentManagement() {
                 </div>
                 <div className="flex items-center space-x-1">
                   <button
+                    onClick={() => testAgent(agent.id)}
+                    className="p-1 hover:bg-blue-100 rounded"
+                    title="Test connection"
+                  >
+                    <Settings className="w-4 h-4 text-blue-500" />
+                  </button>
+                  <button
                     onClick={() => openEditForm(agent)}
                     className="p-1 hover:bg-gray-100 rounded"
                   >
@@ -275,8 +361,18 @@ export default function AgentManagement() {
             <div className="card-body">
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-500">API Endpoint</label>
-                  <p className="text-sm text-gray-900 truncate">{agent.apiEndpoint}</p>
+                  <label className="text-xs font-medium text-gray-500">
+                    {agent.mcpConfig ? 'MCP Configuration' : 'API Endpoint'}
+                  </label>
+                  <p className="text-sm text-gray-900 truncate">
+                    {agent.mcpConfig ? 'MCP Agent' : agent.apiEndpoint}
+                  </p>
+                  {agent.mcpConfig && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800 mt-1">
+                      <FileText className="w-3 h-3 mr-1" />
+                      Model Context Protocol
+                    </span>
+                  )}
                 </div>
 
                 {Object.keys(agent.configuration || {}).length > 0 && (
@@ -381,7 +477,7 @@ export default function AgentManagement() {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      API Endpoint *
+                      API Endpoint {!mcpConfig ? '*' : '(Optional)'}
                     </label>
                     <input
                       type="url"
@@ -389,7 +485,13 @@ export default function AgentManagement() {
                       onChange={(e) => setFormData({ ...formData, apiEndpoint: e.target.value })}
                       className="input-field"
                       placeholder="https://api.example.com/chat"
+                      disabled={!!mcpConfig}
                     />
+                    {mcpConfig && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        API endpoint is not required when MCP configuration is provided
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -458,6 +560,59 @@ export default function AgentManagement() {
                     >
                       + Add Configuration Pair
                     </button>
+                  </div>
+                </div>
+
+                {/* MCP Configuration */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    MCP Configuration (Optional)
+                  </label>
+                  <p className="text-sm text-gray-500 mb-3">
+                    Upload an MCP config file to enable Model Context Protocol integration
+                  </p>
+                  <div className="space-y-3">
+                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors">
+                      <div className="flex items-center justify-center">
+                        <label className="cursor-pointer flex flex-col items-center">
+                          <Upload className="w-8 h-8 text-gray-400 mb-2" />
+                          <span className="text-sm text-gray-600">
+                            {mcpConfigFile ? mcpConfigFile.name : 'Click to upload MCP config (JSON)'}
+                          </span>
+                          <input
+                            type="file"
+                            accept=".json"
+                            onChange={handleMcpFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                    
+                    {mcpConfig && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="text-sm font-medium text-gray-700 flex items-center">
+                            <FileText className="w-4 h-4 mr-1" />
+                            Loaded MCP Configuration
+                          </label>
+                          <button
+                            onClick={() => {
+                              setMcpConfig(null);
+                              setMcpConfigFile(null);
+                            }}
+                            className="text-red-500 hover:text-red-600 text-xs"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="bg-white rounded border p-3 max-h-32 overflow-y-auto">
+                          <pre className="text-xs text-gray-800">
+                            {JSON.stringify(mcpConfig, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
 
