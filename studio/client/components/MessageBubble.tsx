@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Bot, User, AlertCircle, Clock, Copy, Check } from 'lucide-react';
+import { Bot, User, AlertCircle, Clock, Copy, Check, GitBranch } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -20,9 +20,10 @@ interface Message {
 
 interface MessageBubbleProps {
   message: Message;
+  onGenerateFlowchart?: (content: string) => void;
 }
 
-export default function MessageBubble({ message }: MessageBubbleProps) {
+export default function MessageBubble({ message, onGenerateFlowchart }: MessageBubbleProps) {
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { 
       hour: '2-digit', 
@@ -243,39 +244,51 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           ? 'bg-blue-500 text-white' 
           : 'bg-white border border-gray-200 shadow-sm'
       }`}>
-        {/* Message header */}
-        <div className={`px-3 sm:px-4 pt-2 pb-1 border-b ${
-          isUser 
-            ? 'border-blue-400 border-opacity-30' 
-            : 'border-gray-100'
-        }`}>
-          <div className={`text-xs font-medium ${
-            isUser ? 'text-blue-100' : 'text-gray-600'
-          }`}>
-            {isUser ? 'You' : message.sender || 'AI Assistant'}
-          </div>
-        </div>
-        
-        {/* Message content with Markdown rendering */}
-        <div className={`px-3 sm:px-4 py-2 ${
-          isUser ? 'text-white' : 'text-gray-900'
-        }`}>
-          <div className="prose prose-sm max-w-none">
-            <ReactMarkdown 
-              remarkPlugins={[remarkGfm]}
-              components={markdownComponents}
-              className={isUser ? 'markdown-user' : 'markdown-agent'}
+        <div className="relative">
+          {/* Flowchart trigger button for user messages */}
+          {isUser && onGenerateFlowchart && (
+            <button
+              onClick={e => { e.stopPropagation(); onGenerateFlowchart(message.content); }}
+              className="absolute top-2 right-2 p-1 bg-purple-600 hover:bg-purple-500 text-white rounded-full"
+              title="Generate flowchart"
             >
-              {message.content}
-            </ReactMarkdown>
+              <GitBranch className="w-4 h-4" />
+            </button>
+          )}
+          {/* Message header */}
+          <div className={`px-3 sm:px-4 pt-2 pb-1 border-b ${
+            isUser 
+              ? 'border-blue-400 border-opacity-30' 
+              : 'border-gray-100'
+          }`}>
+            <div className={`text-xs font-medium ${
+              isUser ? 'text-blue-100' : 'text-gray-600'
+            }`}>
+              {isUser ? 'You' : message.sender || 'AI Assistant'}
+            </div>
           </div>
-        </div>
-        
-        {/* Timestamp */}
-        <div className={`px-3 sm:px-4 pb-2 text-xs ${
-          isUser ? 'text-blue-100' : 'text-gray-400'
-        }`}>
-          {formatTimestamp(message.timestamp)}
+          
+          {/* Message content with Markdown rendering */}
+          <div className={`px-3 sm:px-4 py-2 ${
+            isUser ? 'text-white' : 'text-gray-900'
+          }`}>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown 
+                remarkPlugins={[remarkGfm]}
+                components={markdownComponents}
+                className={isUser ? 'markdown-user' : 'markdown-agent'}
+              >
+                {message.content}
+              </ReactMarkdown>
+            </div>
+          </div>
+          
+          {/* Timestamp */}
+          <div className={`px-3 sm:px-4 pb-2 text-xs ${
+            isUser ? 'text-blue-100' : 'text-gray-400'
+          }`}>
+            {formatTimestamp(message.timestamp)}
+          </div>
         </div>
       </div>
       

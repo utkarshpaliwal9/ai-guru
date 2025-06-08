@@ -45,12 +45,20 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
   const [mermaidCode, setMermaidCode] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (input.trim()) {
       generateFlowchart();
     }
   }, [input, availableAgents]);
+
+  // Render Mermaid diagram when mermaidCode changes
+  useEffect(() => {
+    if (mermaidCode && containerRef.current) {
+      mermaid.run({ nodes: [containerRef.current] });
+    }
+  }, [mermaidCode]);
 
   const parseUserInput = (text: string): FlowchartData => {
     const mentionedAgents = new Set<string>();
@@ -473,10 +481,10 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
         animate={{ opacity: 1, y: 0 }}
         className="bg-white border border-gray-200 rounded-lg p-6 overflow-auto"
       >
-        <div className="mermaid-container">
-          <pre className="mermaid">
+        <div className="mermaid-container w-full">
+          <div ref={containerRef} className="mermaid">
             {mermaidCode}
-          </pre>
+          </div>
         </div>
       </motion.div>
 
