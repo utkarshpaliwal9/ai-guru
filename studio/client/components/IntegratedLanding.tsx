@@ -15,6 +15,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import Logo from './Logo';
+import DataFlowAnimation from './DataFlowAnimation';
 
 interface IntegratedLandingProps {
   onCreateNewChat: () => void;
@@ -123,30 +124,9 @@ const IntegratedLanding: React.FC<IntegratedLandingProps> = ({ onCreateNewChat }
           </motion.div>
           
           {/* Right Column - Visual Element */}
-          <motion.div
-            className="relative h-80 w-full hidden md:flex items-center justify-center"
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.8, delay: 0.2 }}
-          >
-            {/* Central Logo */}
-            <motion.div
-              animate={{ scale: [1, 1.05, 1] }}
-              transition={{ duration: 4, repeat: Infinity, ease: 'easeInOut' }}
-            >
-              <Logo size="lg" className="w-24 h-24" />
-            </motion.div>
-            
-            {/* Floating Icons */}
-            <AnimatedIcon icon={Bot} position="top-0 left-20" delay={0} />
-            <AnimatedIcon icon={Settings} position="top-16 right-0" delay={0.5} />
-            <AnimatedIcon icon={Zap} position="bottom-12 left-0" delay={1} />
-            <AnimatedIcon icon={Network} position="bottom-0 right-24" delay={1.5} />
-            
-            {/* Background Glow */}
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-purple-200 rounded-full opacity-30 blur-2xl -z-10"></div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/4 -translate-y-1/4 w-64 h-64 bg-blue-200 rounded-full opacity-30 blur-2xl -z-10"></div>
-          </motion.div>
+          <div className="relative w-full min-h-[350px] hidden md:flex items-center justify-center">
+            <DataFlowAnimation />
+          </div>
         </section>
 
         {/* Workflow Diagram Section */}
@@ -265,26 +245,5 @@ const IntegratedLanding: React.FC<IntegratedLandingProps> = ({ onCreateNewChat }
     </div>
   );
 };
-
-const AnimatedIcon: React.FC<{ icon: React.ElementType, position: string, delay: number }> = ({ icon: Icon, position, delay }) => {
-  return (
-    <motion.div
-      className={`absolute ${position}`}
-      initial={{ opacity: 0, y: 0 }}
-      animate={{ opacity: 1, y: [-5, 5] }}
-      transition={{
-        duration: 3,
-        repeat: Infinity,
-        repeatType: 'mirror',
-        ease: 'easeInOut',
-        delay
-      }}
-    >
-      <div className="p-3 bg-white bg-opacity-80 backdrop-blur-sm rounded-full shadow-lg border border-gray-100">
-        <Icon className="w-6 h-6 text-purple-600" />
-      </div>
-    </motion.div>
-  )
-}
 
 export default IntegratedLanding; 
