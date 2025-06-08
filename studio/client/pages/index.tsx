@@ -4,11 +4,15 @@ import { motion } from 'framer-motion';
 import { MessageCircle, Settings, Plus, Users, Menu, X } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import AgentManagement from '@/components/AgentManagement';
+import LandingPage from '@/components/LandingPage';
+import Logo from '@/components/Logo';
 import { useSocket } from '@/hooks/useSocket';
 
 type TabType = 'chat' | 'agents' | 'mcp';
+type ViewType = 'landing' | 'app';
 
 export default function Home() {
+  const [currentView, setCurrentView] = useState<ViewType>('landing');
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -19,12 +23,32 @@ export default function Home() {
     setCurrentConversationId(id || null);
   };
 
+  const handleGetStarted = () => {
+    setCurrentView('app');
+  };
+
+  if (currentView === 'landing') {
+    return (
+      <>
+        <Head>
+          <title>Avalara Studio - Agentic AI Platform</title>
+          <meta name="description" content="Orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver results." />
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+        <LandingPage onGetStarted={handleGetStarted} />
+      </>
+    );
+  }
+
   return (
     <>
       <Head>
-        <title>Agentic AI Chatbot Platform</title>
+        <title>Avalara Studio - Agentic AI Platform</title>
         <meta name="description" content="Multi-agent AI chatbot platform with MCP integration" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
@@ -32,11 +56,9 @@ export default function Home() {
         {/* Mobile Header */}
         <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <MessageCircle className="w-5 h-5 text-white" />
-            </div>
+            <Logo size="md" />
             <div>
-              <h1 className="text-lg font-bold text-gray-900">AI Guru</h1>
+              <h1 className="text-lg font-bold text-gray-900">Avalara Studio</h1>
             </div>
           </div>
           <button
@@ -52,11 +74,9 @@ export default function Home() {
           {/* Header - Hidden on mobile (shown in mobile header) */}
           <div className="hidden md:block p-6 border-b border-gray-200">
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                <MessageCircle className="w-6 h-6 text-white" />
-              </div>
+              <Logo size="lg" />
               <div>
-                <h1 className="text-lg font-bold text-gray-900">AI Guru</h1>
+                <h1 className="text-lg font-bold text-gray-900">Avalara Studio</h1>
                 <p className="text-sm text-gray-500">Agentic Platform</p>
               </div>
             </div>
@@ -103,6 +123,16 @@ export default function Home() {
               MCP Servers
             </button>
           </nav>
+
+          {/* Back to Landing */}
+          <div className="p-4 border-t border-gray-200">
+            <button
+              onClick={() => setCurrentView('landing')}
+              className="w-full text-left text-sm text-gray-600 hover:text-gray-900 transition-colors"
+            >
+              ← Back to Landing
+            </button>
+          </div>
 
           {/* Connection Status */}
           <div className="p-4 border-t border-gray-200">

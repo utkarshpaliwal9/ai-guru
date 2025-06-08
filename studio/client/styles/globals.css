@@ -238,6 +238,12 @@
   @apply line-through text-gray-500 opacity-75;
 }
 
+/* Background patterns for landing page */
+.bg-grid-pattern {
+  background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Table styling improvements */
 .markdown-user table,
 .markdown-agent table {
