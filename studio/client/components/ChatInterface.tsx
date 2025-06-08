@@ -5,6 +5,7 @@ import { Socket } from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
+import IntegratedLanding from './IntegratedLanding';
 
 interface Message {
   id: string;
@@ -439,26 +440,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       </div>
 
       {!conversationId ? (
-        <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center p-4 sm:p-8 max-w-md mx-auto"
-          >
-            <Bot className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2">No Conversation Selected</h3>
-            <p className="text-sm sm:text-base text-gray-600 mb-6">
-              Click the header above to select a conversation or create a new one to start chatting with Alfa AI.
-            </p>
-            <button
-              onClick={createNewConversation}
-              className="btn-primary text-sm sm:text-base"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Start New Chat
-            </button>
-          </motion.div>
-        </div>
+        <IntegratedLanding onCreateNewChat={createNewConversation} />
       ) : (
         <>
           {/* Messages */}

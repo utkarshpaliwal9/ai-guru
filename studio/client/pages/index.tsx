@@ -4,15 +4,11 @@ import { motion } from 'framer-motion';
 import { MessageCircle, Settings, Plus, Users, Menu, X } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import AgentManagement from '@/components/AgentManagement';
-import LandingPage from '@/components/LandingPage';
 import Logo from '@/components/Logo';
 import { useSocket } from '@/hooks/useSocket';
 
 type TabType = 'chat' | 'agents' | 'mcp';
-type ViewType = 'landing' | 'app';
-
 export default function Home() {
-  const [currentView, setCurrentView] = useState<ViewType>('landing');
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -23,24 +19,7 @@ export default function Home() {
     setCurrentConversationId(id || null);
   };
 
-  const handleGetStarted = () => {
-    setCurrentView('app');
-  };
 
-  if (currentView === 'landing') {
-    return (
-      <>
-        <Head>
-          <title>Avalara Studio - Agentic AI Platform</title>
-          <meta name="description" content="Orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver results." />
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
-          <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-          <link rel="icon" href="/favicon.ico" />
-        </Head>
-        <LandingPage onGetStarted={handleGetStarted} />
-      </>
-    );
-  }
 
   return (
     <>
@@ -124,15 +103,7 @@ export default function Home() {
             </button>
           </nav>
 
-          {/* Back to Landing */}
-          <div className="p-4 border-t border-gray-200">
-            <button
-              onClick={() => setCurrentView('landing')}
-              className="w-full text-left text-sm text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              ← Back to Landing
-            </button>
-          </div>
+
 
           {/* Connection Status */}
           <div className="p-4 border-t border-gray-200">
