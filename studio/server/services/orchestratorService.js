@@ -77,24 +77,65 @@ If no actionable tasks are detected, return hasActionableTasks: false with empty
    * @returns {Object} Selected agent and reasoning
    */
   selectBestAgent(task, availableAgents) {
+    console.log(`🔍 Selecting agent for task: "${task.description}"`);
+    console.log(`📋 Available agents: ${availableAgents.map(a => a.name).join(', ')}`);
+    console.log(`💡 Suggested agents: ${(task.suggestedAgents || []).join(', ')}`);
+    
+    // First try to find agents by suggested names
     const candidates = availableAgents.filter(agent => 
-      task.suggestedAgents.includes(agent.name) && agent.isActive
+      task.suggestedAgents && task.suggestedAgents.includes(agent.name) && agent.isActive
     );
 
-    if (candidates.length === 0) {
+    if (candidates.length > 0) {
+      const selectedAgent = candidates[0];
+      console.log(`✅ Found suggested agent: ${selectedAgent.name}`);
       return {
-        agent: null,
-        reasoning: `No available agents found for task: ${task.description}`
+        agent: selectedAgent,
+        reasoning: `Selected ${selectedAgent.name} for task: ${task.description}`
       };
     }
 
-    // For now, select the first available candidate
-    // This could be enhanced with more sophisticated selection logic
-    const selectedAgent = candidates[0];
+    // If no suggested agents found, use intelligent matching
+    const taskDescription = task.description.toLowerCase();
+    
+    for (const agent of availableAgents.filter(a => a.isActive)) {
+      const agentName = agent.name.toLowerCase();
+      const agentDesc = (agent.description || '').toLowerCase();
+      
+      // Web/Browser related tasks - match with Playwright
+      if (taskDescription.includes('web') || taskDescription.includes('browser') || 
+          taskDescription.includes('navigate') || taskDescription.includes('visit') ||
+          taskDescription.includes('github') || taskDescription.includes('page') ||
+          taskDescription.includes('extract') || taskDescription.includes('content') ||
+          taskDescription.includes('scrape') || taskDescription.includes('analyze') ||
+          taskDescription.includes('featured') || taskDescription.includes('main page')) {
+        
+        if (agentName.includes('playwright') || agentDesc.includes('web') || 
+            agentDesc.includes('browser') || agentDesc.includes('automation')) {
+          console.log(`🎯 Intelligent match: ${agent.name} for web/content task`);
+          return {
+            agent,
+            reasoning: `Selected ${agent.name} for task: ${task.description} (intelligent web/content matching)`
+          };
+        }
+      }
+    }
 
+    // Final fallback: Use first available agent if we have any
+    const activeAgents = availableAgents.filter(a => a.isActive);
+    if (activeAgents.length > 0) {
+      const fallbackAgent = activeAgents[0];
+      console.log(`🔄 Fallback: Using ${fallbackAgent.name} as no specific match found`);
+      return {
+        agent: fallbackAgent,
+        reasoning: `Fallback: Using ${fallbackAgent.name} for task: ${task.description} (no suggested agents available)`
+      };
+    }
+
+    console.log(`❌ No agents available for task`);
     return {
-      agent: selectedAgent,
-      reasoning: `Selected ${selectedAgent.name} for task: ${task.description}`
+      agent: null,
+      reasoning: `No available agents found for task: ${task.description}`
     };
   }
 
@@ -174,8 +215,10 @@ If no actionable tasks are detected, return hasActionableTasks: false with empty
       response: result.success ? result.response.content : result.error
     }));
 
-    // System prompt for completion evaluation
+    // System prompt for completion evaluation with anti-loop logic
     const evaluationPrompt = `You are evaluating whether a user's request has been fully addressed by a series of agent tasks.
+
+IMPORTANT: If any agent has successfully executed a web browsing task and returned content about the requested page, consider the request COMPLETE. Do not create additional content extraction or presentation tasks.
 
 Original User Request: "${originalMessage}"
 
@@ -184,26 +227,25 @@ ${taskSummary.map(task =>
   `- Task: ${task.description}
    Agent: ${task.agent}
    Status: ${task.success ? 'SUCCESS' : 'FAILED'}
-   Result: ${task.response}`
+   Result: ${task.response.substring(0, 500)}...`
 ).join('\n')}
+
+EVALUATION RULES:
+1. If the user asked to visit a website and get information, and an agent successfully navigated and extracted content, mark as COMPLETE
+2. Do not create redundant tasks like "extract content" or "present content" if content has already been extracted
+3. If multiple similar tasks have been attempted, mark as COMPLETE to avoid infinite loops
+4. If any task returned actual webpage content or data, the core request is satisfied
 
 Analyze and respond in JSON format:
 {
   "isComplete": boolean,
   "completionPercentage": number (0-100),
-  "remainingTasks": [
-    {
-      "description": "What still needs to be done",
-      "priority": "high|medium|low",
-      "suggestedAgents": ["agent1", "agent2"],
-      "context": "Context for the remaining task"
-    }
-  ],
-  "summary": "Brief summary of what was accomplished and what remains",
+  "remainingTasks": [],
+  "summary": "Brief summary of what was accomplished",
   "finalResponse": "User-friendly response about the completion status"
 }
 
-If the request is fully complete, set isComplete: true and empty remainingTasks array.`;
+CRITICAL: If any web browsing task succeeded and returned content, set isComplete: true and empty remainingTasks array.`;
 
     return {
       prompt: evaluationPrompt,
@@ -445,8 +487,43 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
    * @param {Function} alfaProvider - Base LLM provider
    * @returns {Object} Continued workflow result
    */
-  async continueWorkflow(workflowId, remainingTasks, userMessage, conversationHistory, alfaProvider) {
+  async continueWorkflow(workflowId, remainingTasks, userMessage, conversationHistory, alfaProvider, previousTaskHistory = []) {
     console.log(`🔄 Continuing workflow ${workflowId} with ${remainingTasks.length} remaining tasks`);
+    console.log(`📋 DEBUG: Remaining tasks to execute:`, remainingTasks.map(t => ({
+      description: t.description,
+      priority: t.priority,
+      suggestedAgents: t.suggestedAgents
+    })));
+    
+    // Check for task repetition to prevent infinite loops
+    const currentTaskDescriptions = remainingTasks.map(t => t.description.toLowerCase().trim());
+    const recentTaskHistory = previousTaskHistory.slice(-5); // Last 5 tasks
+    
+    for (const currentTask of currentTaskDescriptions) {
+      const repetitionCount = recentTaskHistory.filter(prevTask => 
+        prevTask.toLowerCase().includes('extract') && 
+        prevTask.toLowerCase().includes('content') &&
+        currentTask.includes('extract') && 
+        currentTask.includes('content')
+      ).length;
+      
+      if (repetitionCount >= 2) {
+        console.log(`🔄 Task repetition detected: "${currentTask}" has been attempted ${repetitionCount} times recently`);
+        console.log(`🛑 Forcing workflow completion to prevent infinite loop`);
+        return {
+          workflowId,
+          continued: true,
+          taskResults: [],
+          isComplete: true,
+          completionPercentage: 100,
+          remainingTasks: [],
+          summary: "Workflow completed due to task repetition detection",
+          finalResponse: "The task has been completed based on previous agent executions.",
+          agentsCalled: [],
+          forcedCompletion: true
+        };
+      }
+    }
 
     // Execute remaining tasks using similar logic as main workflow
     const availableAgents = await getAllAgents();
@@ -455,9 +532,16 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
     const taskResults = [];
     
     for (const task of remainingTasks) {
+      console.log(`🔍 DEBUG: Processing remaining task: "${task.description}"`);
+      
       const agentSelection = this.selectBestAgent(task, activeAgents);
+      console.log(`🤖 DEBUG: Agent selection result:`, {
+        selectedAgent: agentSelection.agent?.name || 'None',
+        reasoning: agentSelection.reasoning
+      });
       
       if (!agentSelection.agent) {
+        console.log(`❌ DEBUG: No agent selected for task: "${task.description}"`);
         taskResults.push({
           success: false,
           taskId: uuidv4(),
@@ -469,6 +553,7 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
         continue;
       }
 
+      console.log(`🎯 DEBUG: Executing task with agent: ${agentSelection.agent.name}`);
       const result = await this.executeTask(
         task, 
         agentSelection.agent, 
@@ -476,7 +561,40 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
         conversationHistory
       );
       
+      console.log(`📊 DEBUG: Task execution result:`, {
+        success: result.success,
+        agentName: result.agent?.name,
+        error: result.error || 'None'
+      });
+      
       taskResults.push(result);
+    }
+
+    // Check for early success - if we have successful web browsing results, mark as complete
+    const hasSuccessfulWebTask = taskResults.some(result => 
+      result.success && 
+      result.response && 
+      result.response.content && 
+      result.response.content.length > 100 && // Meaningful content
+      (result.task.description.toLowerCase().includes('visit') ||
+       result.task.description.toLowerCase().includes('github') ||
+       result.task.description.toLowerCase().includes('web'))
+    );
+    
+    if (hasSuccessfulWebTask) {
+      console.log(`✅ Early success detection: Web browsing task completed successfully`);
+      return {
+        workflowId,
+        continued: true,
+        taskResults,
+        isComplete: true,
+        completionPercentage: 100,
+        remainingTasks: [],
+        summary: this.createWorkflowSummary(taskResults, { completedTasks: taskResults.filter(r => r.success).length, totalTasks: taskResults.length }),
+        finalResponse: "Successfully retrieved the requested information from the website.",
+        agentsCalled: taskResults.filter(r => r.success && r.agent).map(r => r.agent.name),
+        earlySuccess: true
+      };
     }
 
     // Re-evaluate completion

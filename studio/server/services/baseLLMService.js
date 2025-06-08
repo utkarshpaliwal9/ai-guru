@@ -92,11 +92,17 @@ class BaseLLMService {
       // If the orchestrator determined agents are needed
       if (workflowResult.requiresAgents) {
         // Continue workflow until completion if it's not complete
-        let maxContinuations = 5; // Prevent infinite loops
+        let maxContinuations = 50; // Allow more attempts for complex workflows
         let continuationCount = 0;
+        let noProgressCount = 0; // Track continuations with no progress
+        let taskHistory = []; // Track task descriptions to detect repetition
         
-        while (!workflowResult.isComplete && continuationCount < maxContinuations) {
+        while (!workflowResult.isComplete && continuationCount < maxContinuations && noProgressCount < 3) {
           console.log(`🔄 Workflow ${workflowResult.workflowId} not complete (${workflowResult.completionPercentage}%), continuing with ${workflowResult.remainingTasks.length} remaining tasks...`);
+          
+          // Track starting state for progress detection
+          const startingPercentage = workflowResult.completionPercentage;
+          const startingTasksCount = workflowResult.remainingTasks.length;
           
           // Emit progress event if io is available
           if (io && conversationId) {
@@ -111,12 +117,18 @@ class BaseLLMService {
           
           console.log(`🔄 Starting continuation ${continuationCount + 1} for workflow ${workflowResult.workflowId}`);
           
+          // Add current remaining tasks to history for repetition detection
+          if (workflowResult.remainingTasks) {
+            taskHistory.push(...workflowResult.remainingTasks.map(t => t.description));
+          }
+          
           const continuedResult = await orchestratorService.continueWorkflow(
             workflowResult.workflowId,
             workflowResult.remainingTasks,
             userMessage,
             conversationHistory,
-            this.alfaProvider
+            this.alfaProvider,
+            taskHistory // Pass task history for repetition detection
           );
           
           console.log(`🔄 Continuation ${continuationCount + 1} completed:`, {
@@ -151,6 +163,29 @@ class BaseLLMService {
           };
           
           continuationCount++;
+          
+          // Check for progress - if no meaningful progress was made, increment no-progress counter
+          const progressMade = workflowResult.completionPercentage > startingPercentage || 
+                              workflowResult.remainingTasks.length < startingTasksCount ||
+                              (continuedResult.agentsCalled && continuedResult.agentsCalled.length > 0) ||
+                              continuedResult.forcedCompletion || // Respect forced completion from repetition detection
+                              continuedResult.earlySuccess; // Respect early success detection
+          
+          // If continuation was forced to complete due to repetition, break the loop
+          if (continuedResult.forcedCompletion || continuedResult.earlySuccess) {
+            console.log(`🛑 Workflow completion forced: ${continuedResult.forcedCompletion ? 'repetition detected' : 'early success'}`);
+            workflowResult.isComplete = true;
+            break;
+          }
+          
+          if (!progressMade) {
+            noProgressCount++;
+            console.log(`⚠️ No progress detected in continuation ${continuationCount} (${noProgressCount}/3 strikes)`);
+          } else {
+            noProgressCount = 0; // Reset if progress was made
+            console.log(`✅ Progress detected in continuation ${continuationCount}`);
+          }
+          
           console.log(`🔄 Workflow continuation ${continuationCount} completed - ${workflowResult.isComplete ? 'COMPLETE' : 'PARTIAL'} (${workflowResult.completionPercentage}%)`);
           
           // Emit continuation progress event
@@ -168,18 +203,29 @@ class BaseLLMService {
           }
         }
         
-        if (!workflowResult.isComplete && continuationCount >= maxContinuations) {
-          console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped after ${maxContinuations} continuations to prevent infinite loop`);
+        if (!workflowResult.isComplete) {
+          let stopReason = '';
+          let stopMessage = '';
+          
+          if (noProgressCount >= 3) {
+            stopReason = 'no-progress';
+            stopMessage = `Workflow stopped after ${noProgressCount} continuations with no progress`;
+            console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped due to lack of progress (${noProgressCount} failed attempts)`);
+          } else if (continuationCount >= maxContinuations) {
+            stopReason = 'max-continuations-reached';
+            stopMessage = `Workflow stopped after ${maxContinuations} iterations to prevent infinite loop`;
+            console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped after ${maxContinuations} continuations to prevent infinite loop`);
+          }
           
           // Emit warning event
           if (io && conversationId) {
             io.to(conversationId).emit('workflow-progress', {
               workflowId: workflowResult.workflowId,
-              status: 'max-continuations-reached',
+              status: stopReason,
               completionPercentage: workflowResult.completionPercentage,
               remainingTasks: workflowResult.remainingTasks.length,
               continuationCount: continuationCount,
-              message: `Workflow stopped after ${maxContinuations} iterations to prevent infinite loop`
+              message: stopMessage
             });
           }
         }
