@@ -56,29 +56,40 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
   const [showAgentSuggestions, setShowAgentSuggestions] = useState(false);
   const [agentSuggestions, setAgentSuggestions] = useState<Agent[]>([]);
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showConversationDropdown, setShowConversationDropdown] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const suggestionsRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingAgents]);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowConversationDropdown(false);
+      }
+      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
+        setShowAgentSuggestions(false);
+        setSelectedSuggestionIndex(0);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Reset selected suggestion index when suggestions change
+  useEffect(() => {
+    setSelectedSuggestionIndex(0);
+  }, [agentSuggestions]);
 
   // Socket event handlers
   useEffect(() => {
@@ -254,18 +265,28 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       const spaceIndex = afterAt.indexOf(' ');
       const searchTerm = spaceIndex === -1 ? afterAt : afterAt.substring(0, spaceIndex);
       
-      if (searchTerm.length > 0 && spaceIndex === -1) {
-        // Show suggestions
-        const filtered = availableAgents.filter(agent => 
-          agent.name.toLowerCase().includes(searchTerm.toLowerCase())
-        );
+      if (spaceIndex === -1) {
+        // Show suggestions when @ is typed (even without additional characters)
+        let filtered = availableAgents;
+        
+        if (searchTerm.length > 0) {
+          // Filter by search term if provided
+          filtered = availableAgents.filter(agent => 
+            agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            agent.description.toLowerCase().includes(searchTerm.toLowerCase())
+          );
+        }
+        
         setAgentSuggestions(filtered);
         setShowAgentSuggestions(filtered.length > 0);
+        setSelectedSuggestionIndex(0);
       } else {
         setShowAgentSuggestions(false);
+        setSelectedSuggestionIndex(0);
       }
     } else {
       setShowAgentSuggestions(false);
+      setSelectedSuggestionIndex(0);
     }
   };
 
@@ -275,11 +296,20 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       const beforeAt = inputMessage.substring(0, lastAtIndex);
       const afterAt = inputMessage.substring(lastAtIndex + 1);
       const spaceIndex = afterAt.indexOf(' ');
-      const afterMention = spaceIndex === -1 ? '' : afterAt.substring(spaceIndex);
+      const afterMention = spaceIndex === -1 ? ' ' : afterAt.substring(spaceIndex);
       
       setInputMessage(`${beforeAt}@${agent.name}${afterMention}`);
       setShowAgentSuggestions(false);
-      inputRef.current?.focus();
+      setSelectedSuggestionIndex(0);
+      
+      // Set cursor position after the mention
+      setTimeout(() => {
+        const newPosition = beforeAt.length + agent.name.length + 2; // +2 for @ and space
+        if (inputRef.current) {
+          inputRef.current.setSelectionRange(newPosition, newPosition);
+          inputRef.current.focus();
+        }
+      }, 0);
     }
   };
 
@@ -307,21 +337,34 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (showAgentSuggestions && agentSuggestions.length > 0) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (e.key === 'ArrowDown') {
         e.preventDefault();
-        // Handle arrow key navigation for agent suggestions
-        // For simplicity, we'll just select the first suggestion on Enter
+        setSelectedSuggestionIndex(prev => 
+          prev < agentSuggestions.length - 1 ? prev + 1 : 0
+        );
         return;
       }
+      
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedSuggestionIndex(prev => 
+          prev > 0 ? prev - 1 : agentSuggestions.length - 1
+        );
+        return;
+      }
+      
       if (e.key === 'Tab' || e.key === 'Enter') {
         e.preventDefault();
-        if (agentSuggestions.length > 0) {
-          selectAgent(agentSuggestions[0]);
+        if (agentSuggestions[selectedSuggestionIndex]) {
+          selectAgent(agentSuggestions[selectedSuggestionIndex]);
         }
         return;
       }
+      
       if (e.key === 'Escape') {
+        e.preventDefault();
         setShowAgentSuggestions(false);
+        setSelectedSuggestionIndex(0);
         return;
       }
     }
@@ -477,7 +520,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                      {/* Input */}
            <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
              <div className="mb-2 text-xs text-gray-500 hidden sm:block">
-               Press Enter to send, Shift+Enter for new line • Type @ to mention agents
+               Press Enter to send, Shift+Enter for new line • Type @ to mention agents • Use ↑↓ to navigate, Tab/Enter to select
              </div>
                             <div className="flex items-stretch space-x-2 sm:space-x-3">
                  <div className="flex-1 relative">
@@ -486,7 +529,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                      type="text"
                      value={inputMessage}
                      onChange={handleInputChange}
-                     onKeyPress={handleKeyPress}
+                     onKeyDown={handleKeyPress}
                      placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
                      className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none box-border"
                      disabled={isLoading}
@@ -494,29 +537,60 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                  
                    {/* Agent Suggestions Dropdown */}
                    {showAgentSuggestions && agentSuggestions.length > 0 && (
-                     <div className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-40 overflow-y-auto z-10">
-                       {agentSuggestions.map((agent) => (
-                         <button
-                           key={agent.id}
-                           onClick={() => selectAgent(agent)}
-                           className="w-full px-3 py-2 text-left hover:bg-gray-50 flex items-center space-x-2 border-b border-gray-100 last:border-b-0"
-                         >
-                           <Bot className="w-4 h-4 text-gray-400" />
-                           <div>
-                             <div className="text-sm font-medium text-gray-900">@{agent.name}</div>
-                             <div className="text-xs text-gray-500 truncate">{agent.description}</div>
-                           </div>
-                           <div className="ml-auto">
-                             <span className={`text-xs px-2 py-1 rounded-full ${
+                     <div 
+                       ref={suggestionsRef}
+                       className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-30"
+                     >
+                       <div className="py-1">
+                         {agentSuggestions.map((agent, index) => (
+                           <button
+                             key={agent.id}
+                             onClick={() => selectAgent(agent)}
+                             className={`w-full px-3 py-2 text-left flex items-center space-x-3 transition-colors ${
+                               index === selectedSuggestionIndex 
+                                 ? 'bg-blue-50 border-l-2 border-blue-500' 
+                                 : 'hover:bg-gray-50'
+                             }`}
+                             onMouseEnter={() => setSelectedSuggestionIndex(index)}
+                           >
+                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                                agent.providerType === 'mcp' 
-                                 ? 'bg-blue-100 text-blue-800' 
-                                 : 'bg-green-100 text-green-800'
+                                 ? 'bg-blue-100' 
+                                 : 'bg-green-100'
                              }`}>
-                               {agent.providerType === 'mcp' ? 'MCP' : 'API'}
-                             </span>
-                           </div>
-                         </button>
-                       ))}
+                               <Bot className={`w-4 h-4 ${
+                                 agent.providerType === 'mcp' 
+                                   ? 'text-blue-600' 
+                                   : 'text-green-600'
+                               }`} />
+                             </div>
+                             <div className="flex-1 min-w-0">
+                               <div className="text-sm font-medium text-gray-900">
+                                 @{agent.name}
+                               </div>
+                               <div className="text-xs text-gray-500 truncate">
+                                 {agent.description}
+                               </div>
+                             </div>
+                             <div className="flex-shrink-0">
+                               <span className={`text-xs px-2 py-1 rounded-full ${
+                                 agent.providerType === 'mcp' 
+                                   ? 'bg-blue-100 text-blue-800' 
+                                   : 'bg-green-100 text-green-800'
+                               }`}>
+                                 {agent.providerType === 'mcp' ? 'MCP' : 'API'}
+                               </span>
+                             </div>
+                           </button>
+                         ))}
+                       </div>
+                       
+                       {/* Helpful hint */}
+                       <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
+                         <div className="text-xs text-gray-500">
+                           Use ↑↓ arrows to navigate • Tab or Enter to select • Esc to close
+                         </div>
+                       </div>
                      </div>
                    )}
                  </div>
