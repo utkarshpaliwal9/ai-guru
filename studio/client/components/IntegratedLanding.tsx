@@ -228,7 +228,7 @@ const IntegratedLanding: React.FC<IntegratedLandingProps> = ({ onCreateNewChat }
           className="text-center bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl p-8 text-white"
         >
           <h2 className="text-2xl sm:text-3xl font-bold mb-4">
-            Ready to Transform Your Workflow?
+            Ready to transform your workflows?
           </h2>
           <p className="text-lg text-blue-100 mb-6 max-w-xl mx-auto">
             Experience the power of intelligent agent orchestration.

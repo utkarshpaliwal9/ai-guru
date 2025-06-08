@@ -264,7 +264,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             transition={{ duration: 0.8 }}
           >
             <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Ready to Transform Your Workflow?
+              Ready to transform your workflows?
             </h2>
             <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
               Join the future of AI-powered automation and experience the power of intelligent agent orchestration.
