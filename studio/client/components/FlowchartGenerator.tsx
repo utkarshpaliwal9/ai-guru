@@ -92,7 +92,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
     // Add Alfa LLM as central orchestrator
     nodes.push({
       id: 'ALFA',
-      label: '🧠 Alfa LLM\\nOrchestrator',
+      label: '🧠 Alfa LLM<br/>Orchestrator',
       type: 'alfa',
       shape: 'hexagon'
     });
@@ -115,7 +115,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
           const agentId = `AGENT_${nodeCounter}`;
           nodes.push({
             id: agentId,
-            label: `${getAgentIcon(agent.providerType)} ${agent.name}\\n${agent.description}`,
+            label: `${getAgentIcon(agent.providerType)} ${agent.name}<br/>${agent.description}`,
             type: 'agent',
             agentType: agent.providerType,
             shape: 'rect'
@@ -147,7 +147,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
         const agentId = `INFERRED_${nodeCounter}`;
         nodes.push({
           id: agentId,
-          label: `${getAgentIcon(agentType)} ${agentType}\\nAgent`,
+          label: `${getAgentIcon(agentType)} ${agentType}<br/>Agent`,
           type: 'agent',
           agentType: agentType,
           shape: 'rect'
@@ -175,7 +175,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
       const decisionId = `DECISION_${nodeCounter}`;
       nodes.push({
         id: decisionId,
-        label: 'Evaluate\\nResults',
+        label: 'Evaluate<br/>Results',
         type: 'decision',
         shape: 'diamond'
       });
