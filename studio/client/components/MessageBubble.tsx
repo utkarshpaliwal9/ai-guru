@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Bot, User, AlertCircle, Clock, Copy, Check, GitBranch } from 'lucide-react';
+import { Bot, User, AlertCircle, Clock, Copy, Check, GitBranch, Save } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -21,9 +21,10 @@ interface Message {
 interface MessageBubbleProps {
   message: Message;
   onGenerateFlowchart?: (content: string) => void;
+  onExportWorkflow?: (content: string) => void;
 }
 
-export default function MessageBubble({ message, onGenerateFlowchart }: MessageBubbleProps) {
+export default function MessageBubble({ message, onGenerateFlowchart, onExportWorkflow }: MessageBubbleProps) {
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString([], { 
       hour: '2-digit', 
@@ -253,6 +254,16 @@ export default function MessageBubble({ message, onGenerateFlowchart }: MessageB
               title="Generate flowchart"
             >
               <GitBranch className="w-4 h-4" />
+            </button>
+          )}
+          {/* Export workflow button for user messages */}
+          {isUser && onExportWorkflow && (
+            <button
+              onClick={e => { e.stopPropagation(); onExportWorkflow(message.content); }}
+              className="absolute top-2 right-8 p-1 bg-green-600 hover:bg-green-500 text-white rounded-full"
+              title="Create Workflow"
+            >
+              <Save className="w-4 h-4" />
             </button>
           )}
           {/* Message header */}

@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
 import { motion } from 'framer-motion';
-import { MessageCircle, Settings, Plus, Users, Menu, X } from 'lucide-react';
+import { MessageCircle, Settings, Plus, Users, Menu, X, FileText } from 'lucide-react';
 import ChatInterface from '@/components/ChatInterface';
 import AgentManagement from '@/components/AgentManagement';
 import Logo from '@/components/Logo';
 import { useSocket } from '@/hooks/useSocket';
+import WorkflowManagement from '../components/WorkflowManagement';
 
-type TabType = 'chat' | 'agents' | 'mcp';
+type TabType = 'chat' | 'agents' | 'mcp' | 'workflows';
 export default function Home() {
   const [activeTab, setActiveTab] = useState<TabType>('chat');
   const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
@@ -101,6 +102,19 @@ export default function Home() {
               <Settings className="w-5 h-5 mr-3" />
               MCP Servers
             </button>
+            
+            <button
+              onClick={() => {
+                setActiveTab('workflows');
+                setIsMobileMenuOpen(false);
+              }}
+              className={`sidebar-item w-full ${
+                activeTab === 'workflows' ? 'sidebar-item-active' : 'sidebar-item-inactive'
+              }`}
+            >
+              <FileText className="w-5 h-5 mr-3" />
+              Workflows
+            </button>
           </nav>
 
 
@@ -161,6 +175,12 @@ export default function Home() {
                   </button>
                 </div>
               </motion.div>
+            </div>
+          )}
+
+          {activeTab === 'workflows' && (
+            <div className="flex-1 p-4 sm:p-6 lg:p-8 min-w-0">
+              <WorkflowManagement />
             </div>
           )}
         </div>

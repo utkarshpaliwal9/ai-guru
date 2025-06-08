@@ -6,6 +6,7 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const CONVERSATIONS_DIR = path.join(DATA_DIR, 'conversations');
 const AGENTS_DIR = path.join(DATA_DIR, 'agents');
 const MCP_DIR = path.join(DATA_DIR, 'mcp');
+const WORKFLOWS_DIR = path.join(DATA_DIR, 'workflows');
 
 export async function initializeStorage() {
   try {
@@ -13,6 +14,7 @@ export async function initializeStorage() {
     await fs.ensureDir(CONVERSATIONS_DIR);
     await fs.ensureDir(AGENTS_DIR);
     await fs.ensureDir(MCP_DIR);
+    await fs.ensureDir(WORKFLOWS_DIR);
     console.log('📁 Storage directories initialized');
   } catch (error) {
     console.error('❌ Error initializing storage:', error);
@@ -199,6 +201,68 @@ export async function deleteMCPServer(serverId) {
     return false;
   } catch (error) {
     console.error('❌ Error deleting MCP server:', error);
+    return false;
+  }
+}
+
+// Workflow storage
+export async function saveWorkflow(workflow) {
+  try {
+    if (!workflow.id) {
+      workflow.id = uuidv4();
+    }
+    workflow.updatedAt = new Date().toISOString();
+    await fs.ensureDir(WORKFLOWS_DIR);
+    const filePath = path.join(WORKFLOWS_DIR, `${workflow.id}.json`);
+    await fs.writeJson(filePath, workflow, { spaces: 2 });
+    return workflow;
+  } catch (error) {
+    console.error('❌ Error saving workflow:', error);
+    throw error;
+  }
+}
+
+export async function getWorkflow(workflowId) {
+  try {
+    const filePath = path.join(WORKFLOWS_DIR, `${workflowId}.json`);
+    if (await fs.pathExists(filePath)) {
+      return await fs.readJson(filePath);
+    }
+    return null;
+  } catch (error) {
+    console.error('❌ Error loading workflow:', error);
+    return null;
+  }
+}
+
+export async function getAllWorkflows() {
+  try {
+    await fs.ensureDir(WORKFLOWS_DIR);
+    const files = await fs.readdir(WORKFLOWS_DIR);
+    const workflows = [];
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const workflow = await fs.readJson(path.join(WORKFLOWS_DIR, file));
+        workflows.push(workflow);
+      }
+    }
+    return workflows.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  } catch (error) {
+    console.error('❌ Error loading workflows:', error);
+    return [];
+  }
+}
+
+export async function deleteWorkflow(workflowId) {
+  try {
+    const filePath = path.join(WORKFLOWS_DIR, `${workflowId}.json`);
+    if (await fs.pathExists(filePath)) {
+      await fs.remove(filePath);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('❌ Error deleting workflow:', error);
     return false;
   }
 } 

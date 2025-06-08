@@ -8,6 +8,7 @@ import agentsRoutes from './routes/agents.js';
 import mcpRoutes from './routes/mcp.js';
 import providersRoutes from './routes/providers.js';
 import orchestratorRoutes from './routes/orchestrator.js';
+import workflowsRoutes from './routes/workflows.js';
 import { initializeStorage } from './utils/storage.js';
 import { handleSocketConnection } from './services/socketService.js';
 
@@ -41,6 +42,7 @@ app.use('/api/agents', agentsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/providers', providersRoutes);
 app.use('/api/orchestrator', orchestratorRoutes);
+app.use('/api/workflows', workflowsRoutes);
 
 // Root route
 app.get('/', (req, res) => {

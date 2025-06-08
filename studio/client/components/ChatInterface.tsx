@@ -51,6 +51,11 @@ interface ChatInterfaceProps {
 
 export default function ChatInterface({ conversationId, onConversationSelect, socket }: ChatInterfaceProps) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
+  const [workflowPrompt, setWorkflowPrompt] = useState('');
+  const [workflowName, setWorkflowName] = useState('');
+  const [workflowDescription, setWorkflowDescription] = useState('');
+  const [isSavingWorkflow, setIsSavingWorkflow] = useState(false);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [typingAgents, setTypingAgents] = useState<AgentTyping[]>([]);
@@ -348,6 +353,45 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     setSelectedMessage(null);
   };
 
+  const openExportWorkflowDialog = (prompt: string) => {
+    setWorkflowPrompt(prompt);
+    setWorkflowName('');
+    setWorkflowDescription('');
+    setShowWorkflowModal(true);
+  };
+
+  const closeExportWorkflowDialog = () => {
+    setShowWorkflowModal(false);
+    setWorkflowPrompt('');
+  };
+
+  const saveWorkflow = async () => {
+    if (!workflowName.trim()) {
+      toast.error('Workflow name is required');
+      return;
+    }
+    try {
+      setIsSavingWorkflow(true);
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/workflows`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: workflowName, description: workflowDescription, prompt: workflowPrompt })
+      });
+      if (response.ok) {
+        toast.success('Workflow created');
+        closeExportWorkflowDialog();
+      } else {
+        const err = await response.json();
+        toast.error(err.error || 'Failed to create workflow');
+      }
+    } catch (error) {
+      console.error('Error saving workflow:', error);
+      toast.error('Failed to create workflow');
+    } finally {
+      setIsSavingWorkflow(false);
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (showAgentSuggestions && agentSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -513,6 +557,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                   <MessageBubble
                     message={message}
                     onGenerateFlowchart={openFlowchartModal}
+                    onExportWorkflow={openExportWorkflowDialog}
                   />
                 </motion.div>
               ))}
@@ -634,6 +679,58 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                   input={selectedMessage}
                   availableAgents={availableAgents}
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Export Workflow Modal */}
+          {showWorkflowModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full relative">
+                <button
+                  onClick={closeExportWorkflowDialog}
+                  className="absolute top-3 right-3 p-2 text-gray-600 hover:text-gray-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+                <h2 className="text-lg font-bold mb-4">Create Workflow</h2>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium">Name *</label>
+                    <input
+                      type="text"
+                      value={workflowName}
+                      onChange={e => setWorkflowName(e.target.value)}
+                      className="input-field mt-1 w-full"
+                      placeholder="Workflow name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Description</label>
+                    <textarea
+                      value={workflowDescription}
+                      onChange={e => setWorkflowDescription(e.target.value)}
+                      className="input-field mt-1 w-full"
+                      rows={2}
+                      placeholder="Description (optional)"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Prompt</label>
+                    <textarea
+                      value={workflowPrompt}
+                      disabled
+                      className="input-field mt-1 w-full bg-gray-100"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <button onClick={closeExportWorkflowDialog} className="btn-secondary">Cancel</button>
+                    <button onClick={saveWorkflow} disabled={isSavingWorkflow} className="btn-primary">
+                      {isSavingWorkflow ? 'Saving...' : 'Save Workflow'}
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
