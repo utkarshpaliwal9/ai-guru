@@ -7,6 +7,7 @@ import conversationRoutes from './routes/conversations.js';
 import agentsRoutes from './routes/agents.js';
 import mcpRoutes from './routes/mcp.js';
 import providersRoutes from './routes/providers.js';
+import orchestratorRoutes from './routes/orchestrator.js';
 import { initializeStorage } from './utils/storage.js';
 import { handleSocketConnection } from './services/socketService.js';
 
@@ -39,6 +40,7 @@ app.use('/api/conversations', conversationRoutes);
 app.use('/api/agents', agentsRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/providers', providersRoutes);
+app.use('/api/orchestrator', orchestratorRoutes);
 
 // Root route
 app.get('/', (req, res) => {
@@ -51,7 +53,8 @@ app.get('/', (req, res) => {
       conversations: '/api/conversations',
       agents: '/api/agents',
       providers: '/api/providers',
-      mcp: '/api/mcp'
+      mcp: '/api/mcp',
+      orchestrator: '/api/orchestrator'
     }
   });
 });
