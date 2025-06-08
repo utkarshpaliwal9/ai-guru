@@ -100,19 +100,13 @@ const IntegratedLanding: React.FC<IntegratedLandingProps> = ({ onCreateNewChat }
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <div className="flex items-center space-x-3 mb-4 text-gray-600">
-              <Logo size="sm" />
-              <span className="font-semibold">Avalara Studio</span>
-            </div>
-            <h1 className="text-4xl lg:text-5xl font-bold text-gray-900 mb-6 !leading-tight">
-              Your Agentic
-              <br />
+            <h1 className="text-5xl lg:text-6xl font-bold text-gray-900 mb-6 !leading-tight">
               <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                AI Workspace
+                Avalara Studio
               </span>
             </h1>
-            <p className="text-lg text-gray-600 mb-8 max-w-lg">
-              Orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver results.
+            <p className="text-xl text-gray-600 mb-8 max-w-lg">
+              The Agentic AI Workspace to orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver results.
             </p>
             <button
               onClick={onCreateNewChat}
