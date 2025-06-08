@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Loader2, ChevronDown, Plus, MessageCircle, Trash2 } from 'lucide-react';
+import { Send, Bot, User, Loader2, ChevronDown, Plus, MessageCircle, Trash2, GitBranch, MessageSquare } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import IntegratedLanding from './IntegratedLanding';
+import FlowchartGenerator from './FlowchartGenerator';
+import mermaid from 'mermaid';
 
 interface Message {
   id: string;
@@ -60,6 +62,8 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showConversationDropdown, setShowConversationDropdown] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
+  const [viewMode, setViewMode] = useState<'chat' | 'flowchart'>('chat');
+  const [flowchartInput, setFlowchartInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -150,6 +154,30 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     loadAvailableAgents();
     loadConversations();
   }, []);
+
+  // Initialize Mermaid
+  useEffect(() => {
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'default',
+      securityLevel: 'loose',
+      fontFamily: 'trebuchet ms, verdana, arial, sans-serif',
+      flowchart: {
+        useMaxWidth: true,
+        htmlLabels: true,
+        curve: 'cardinal',
+      },
+    });
+  }, []);
+
+  // Re-render Mermaid diagrams when view mode changes
+  useEffect(() => {
+    if (viewMode === 'flowchart') {
+      setTimeout(() => {
+        mermaid.init(undefined, '.mermaid');
+      }, 100);
+    }
+  }, [viewMode, flowchartInput]);
 
   const loadAvailableAgents = async () => {
     try {
@@ -335,6 +363,24 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     }
   };
 
+  const generateFlowchart = () => {
+    if (!inputMessage.trim()) {
+      toast.error('Please enter a message to generate a flowchart');
+      return;
+    }
+
+    setFlowchartInput(inputMessage);
+    setViewMode('flowchart');
+    toast.success('Generating flowchart...');
+  };
+
+  const toggleViewMode = (mode: 'chat' | 'flowchart') => {
+    setViewMode(mode);
+    if (mode === 'flowchart' && inputMessage.trim()) {
+      setFlowchartInput(inputMessage);
+    }
+  };
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (showAgentSuggestions && agentSuggestions.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -412,6 +458,34 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                   <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" />
                 </button>
 
+                {/* Mode Toggle */}
+                {conversationId && (
+                  <div className="flex items-center space-x-1 mt-2 sm:mt-0 sm:ml-4">
+                    <button
+                      onClick={() => toggleViewMode('chat')}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        viewMode === 'chat'
+                          ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      <span className="hidden sm:inline">Chat</span>
+                    </button>
+                    <button
+                      onClick={() => toggleViewMode('flowchart')}
+                      className={`flex items-center space-x-1 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                        viewMode === 'flowchart'
+                          ? 'bg-purple-100 text-purple-700 border border-purple-200'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <GitBranch className="w-3 h-3" />
+                      <span className="hidden sm:inline">Flowchart</span>
+                    </button>
+                  </div>
+                )}
+
                 {/* Conversation Dropdown */}
                 {showConversationDropdown && (
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto z-20">
@@ -486,35 +560,48 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
         <IntegratedLanding onCreateNewChat={createNewConversation} />
       ) : (
         <>
-          {/* Messages */}
+          {/* Content Area */}
           <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 custom-scrollbar min-h-0">
-            <AnimatePresence>
-              {messages.map((message) => (
-                <motion.div
-                  key={message.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3 }}
-                >
-                  <MessageBubble message={message} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+            {viewMode === 'chat' ? (
+              <>
+                <AnimatePresence>
+                  {messages.map((message) => (
+                    <motion.div
+                      key={message.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <MessageBubble message={message} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
 
-            {/* Typing Indicators */}
-            {typingAgents.map((agent) => (
-              <motion.div
-                key={agent.agentId}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-              >
-                <TypingIndicator agentName={agent.agentName} />
-              </motion.div>
-            ))}
+                {/* Typing Indicators */}
+                {typingAgents.map((agent) => (
+                  <motion.div
+                    key={agent.agentId}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                  >
+                    <TypingIndicator agentName={agent.agentName} />
+                  </motion.div>
+                ))}
 
-            <div ref={messagesEndRef} />
+                <div ref={messagesEndRef} />
+              </>
+            ) : (
+              <FlowchartGenerator 
+                input={flowchartInput} 
+                availableAgents={availableAgents}
+                onGenerate={(flowchart) => {
+                  // Optional: Save flowchart or perform other actions
+                  console.log('Generated flowchart:', flowchart);
+                }}
+              />
+            )}
           </div>
 
                      {/* Input */}
@@ -530,7 +617,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                      value={inputMessage}
                      onChange={handleInputChange}
                      onKeyDown={handleKeyPress}
-                     placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
+                     placeholder={viewMode === 'chat' ? "Ask Alfa anything... Use @agentName to call specialized tools" : "Describe a workflow to generate a flowchart... Use @agentName for specific agents"}
                      className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none box-border"
                      disabled={isLoading}
                    />
@@ -594,6 +681,14 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                      </div>
                    )}
                  </div>
+                 <button
+                   onClick={generateFlowchart}
+                   disabled={!inputMessage.trim()}
+                   className="p-2 sm:p-3 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors border border-purple-200 hover:border-purple-300"
+                   title="Generate Flowchart"
+                 >
+                   <GitBranch className="w-4 h-4" />
+                 </button>
                  <button
                    onClick={sendMessage}
                    disabled={!inputMessage.trim() || isLoading}
