@@ -26,7 +26,8 @@ interface MessageBubbleProps {
 }
 
 // Helper to wrap @mentions in spans for styling
-const highlightMentions = (text: string) => {
+const highlightMentions = (text: string | null | undefined) => {
+  if (!text) return '';
   return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
 };
 
@@ -229,7 +230,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
       >
         <div className="system-message px-3 py-1 rounded-full">
           <Clock className="w-3 h-3 inline mr-1" />
-          {message.content}
+          {message.content || ''}
         </div>
       </motion.div>
     );
@@ -255,7 +256,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
           {/* Flowchart trigger button for user messages */}
           {isUser && onGenerateFlowchart && (
             <button
-              onClick={e => { e.stopPropagation(); onGenerateFlowchart(message.content); }}
+              onClick={e => { e.stopPropagation(); onGenerateFlowchart(message.content || ''); }}
               className="absolute top-2 right-2 p-1 bg-purple-600 hover:bg-purple-500 text-white rounded-full"
               title="Generate flowchart"
             >
@@ -265,7 +266,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
           {/* Export workflow button for user messages */}
           {isUser && onExportWorkflow && (
             <button
-              onClick={e => { e.stopPropagation(); onExportWorkflow(message.content); }}
+              onClick={e => { e.stopPropagation(); onExportWorkflow(message.content || ''); }}
               className="absolute top-2 right-8 p-1 bg-green-600 hover:bg-green-500 text-white rounded-full"
               title="Create Workflow"
             >

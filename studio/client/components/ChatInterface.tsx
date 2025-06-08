@@ -95,6 +95,112 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     loadConversations();
   }, []);
 
+  // Load conversation history when conversationId changes
+  useEffect(() => {
+    if (conversationId) {
+      loadConversationHistory(conversationId);
+    } else {
+      // Clear messages if no conversation is selected
+      setMessages([]);
+    }
+  }, [conversationId]);
+
+  // Setup socket event listeners
+  useEffect(() => {
+    if (!socket) return;
+
+    // Join the conversation room when a conversation is selected
+    if (conversationId) {
+      socket.emit('join-conversation', conversationId);
+    }
+
+    // Handle socket reconnection
+    const handleReconnect = () => {
+      // Rejoin the conversation room if needed
+      if (conversationId) {
+        socket.emit('join-conversation', conversationId);
+      }
+      
+      toast.success('Reconnected to server');
+      setIsLoading(false);
+    };
+
+    // Handle socket disconnect
+    const handleDisconnect = (reason: string) => {
+      console.log('Socket disconnected:', reason);
+      // Only show an error if it's not a normal disconnect (like page refresh)
+      if (reason !== 'io client disconnect' && reason !== 'transport close') {
+        toast.error('Disconnected from server. Attempting to reconnect...');
+      }
+    };
+
+    // Listen for new messages
+    const handleMessageReceived = (message: Message) => {
+      setMessages((prev) => {
+        // If this is a user message and we already have a temporary version, replace it
+        if (message.type === 'user') {
+          // Check if we already have a temporary user message with the same content
+          const hasTempMessage = prev.some(
+            (msg) => msg.id.startsWith('temp-') && 
+                    msg.type === 'user' && 
+                    msg.content === message.content
+          );
+          
+          if (hasTempMessage) {
+            // Replace the temporary message with the real one
+            return prev.map(msg => 
+              (msg.id.startsWith('temp-') && 
+               msg.type === 'user' && 
+               msg.content === message.content) 
+                ? message 
+                : msg
+            );
+          }
+        }
+        
+        // Otherwise, just add the message
+        return [...prev, message];
+      });
+      
+      setIsLoading(false);
+    };
+
+    // Listen for typing indicators
+    const handleAgentTyping = (data: AgentTyping) => {
+      if (data.isTyping) {
+        setTypingAgents((prev) => [...prev.filter(a => a.agentId !== data.agentId), data]);
+      } else {
+        setTypingAgents((prev) => prev.filter(a => a.agentId !== data.agentId));
+      }
+    };
+
+    // Listen for errors
+    const handleError = (error: any) => {
+      console.error('Socket error:', error);
+      toast.error(error.message || 'An error occurred');
+      setIsLoading(false);
+    };
+
+    // Register event listeners
+    socket.on('message-received', handleMessageReceived);
+    socket.on('agent-typing', handleAgentTyping);
+    socket.on('error', handleError);
+    socket.on('connect', handleReconnect);
+    socket.on('disconnect', handleDisconnect);
+
+    // Clean up event listeners when component unmounts or conversationId changes
+    return () => {
+      if (conversationId) {
+        socket.emit('leave-conversation', conversationId);
+      }
+      socket.off('message-received', handleMessageReceived);
+      socket.off('agent-typing', handleAgentTyping);
+      socket.off('error', handleError);
+      socket.off('connect', handleReconnect);
+      socket.off('disconnect', handleDisconnect);
+    };
+  }, [socket, conversationId]);
+
   useEffect(() => {
     if (availableAgents.length > 0) {
       setMentionData(availableAgents.map(agent => ({
@@ -218,6 +324,18 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     const messageContent = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
+
+    // Create a temporary message object for immediate display
+    const temporaryMessage: Message = {
+      id: `temp-${Date.now()}`,
+      content: messageContent,
+      sender: 'user',
+      type: 'user',
+      timestamp: new Date().toISOString()
+    };
+
+    // Add message to UI immediately (don't wait for server response)
+    setMessages(prev => [...prev, temporaryMessage]);
 
     // Send message via socket
     socket.emit('send-message', {
