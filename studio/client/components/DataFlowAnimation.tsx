@@ -54,19 +54,61 @@ const DataFlowAnimation = () => {
 
   return (
     <div className="relative w-[320px] h-[320px] mx-auto">
-      {/* Central Logo */}
+      {/* Central Logo with futuristic effects */}
       <motion.div
         className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10"
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.5, duration: 0.7 }}
       >
-        <Logo size="lg" className="w-24 h-24" />
+        {/* Opaque encircling circle */}
+        <motion.div
+          className="absolute inset-0 -m-3 bg-white/80 rounded-full"
+          animate={{
+            scale: [1, 1.05, 1],
+          }}
+          transition={{
+            duration: 3,
+            repeat: Infinity,
+            repeatType: 'mirror',
+            ease: 'easeInOut',
+          }}
+        />
+        
+        {/* Pulsating futuristic rings */}
+        <motion.div
+          className="absolute inset-0 border-2 border-purple-300 rounded-full"
+          animate={{
+            scale: [1, 1.4, 1],
+            opacity: [0, 0.5, 0],
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: 1
+          }}
+        />
+        <motion.div
+          className="absolute inset-0 border-2 border-blue-300 rounded-full"
+          animate={{
+            scale: [1, 1.6, 1],
+            opacity: [0, 0.5, 0],
+          }}
+          transition={{
+            duration: 4,
+            repeat: Infinity,
+            ease: 'easeInOut',
+            delay: 2
+          }}
+        />
+
+        <Logo size="lg" className="w-24 h-24 relative" />
       </motion.div>
       
       {/* Background Glow */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-purple-200 rounded-full opacity-20 blur-2xl -z-10"></div>
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/4 -translate-y-1/4 w-64 h-64 bg-blue-200 rounded-full opacity-20 blur-2xl -z-10"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 bg-purple-200 rounded-full opacity-30 blur-2xl -z-10"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/4 -translate-y-1/4 w-64 h-64 bg-blue-200 rounded-full opacity-30 blur-2xl -z-10"></div>
 
       {/* SVG for lines and dots */}
       <svg className="absolute top-0 left-0 w-full h-full" viewBox={`0 0 ${size} ${size}`}>
