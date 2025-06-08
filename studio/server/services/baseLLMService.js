@@ -1,6 +1,7 @@
 import { providerFactory } from './providers/ProviderFactory.js';
 import { getAllAgents, getAgent } from '../utils/storage.js';
 import { callAgentAPI } from './agentService.js';
+import { orchestratorService } from './orchestratorService.js';
 
 class BaseLLMService {
   constructor() {
@@ -71,60 +72,240 @@ class BaseLLMService {
     }
   }
 
-  async processMessage(userMessage, conversationHistory = [], conversationId) {
+  async processMessage(userMessage, conversationHistory = [], conversationId, io = null) {
     if (!this.initialized) {
       await this.initialize();
     }
 
     try {
-      // Parse @mentions from the user message
-      const mentionedAgents = this.parseMentions(userMessage);
-      
-      // Get available agents info
-      const availableAgents = await this.getAvailableAgentsInfo();
-      
-      // Prepare context for base LLM
-      const context = {
-        history: conversationHistory,
-        availableAgents,
-        mentionedAgents,
-        metadata: {
-          conversationId,
-          timestamp: new Date().toISOString()
+      console.log(`🎯 Processing message with orchestrator: "${userMessage}"`);
+
+      // Use the new orchestrator workflow
+      let workflowResult = await orchestratorService.orchestrateWorkflow(
+        userMessage,
+        conversationHistory,
+        this.alfaProvider
+      );
+
+      console.log(`🎬 Workflow ${workflowResult.workflowId} completed - requiresAgents: ${workflowResult.requiresAgents}`);
+
+      // If the orchestrator determined agents are needed
+      if (workflowResult.requiresAgents) {
+        // Continue workflow until completion if it's not complete
+        let maxContinuations = 50; // Allow more attempts for complex workflows
+        let continuationCount = 0;
+        let noProgressCount = 0; // Track continuations with no progress
+        let taskHistory = []; // Track task descriptions to detect repetition
+        
+        while (!workflowResult.isComplete && continuationCount < maxContinuations && noProgressCount < 3) {
+          console.log(`🔄 Workflow ${workflowResult.workflowId} not complete (${workflowResult.completionPercentage}%), continuing with ${workflowResult.remainingTasks.length} remaining tasks...`);
+          
+          // Track starting state for progress detection
+          const startingPercentage = workflowResult.completionPercentage;
+          const startingTasksCount = workflowResult.remainingTasks.length;
+          
+          // Emit progress event if io is available
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: 'continuing',
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              message: `Processing additional tasks... (${workflowResult.completionPercentage}% complete)`
+            });
+          }
+          
+          console.log(`🔄 Starting continuation ${continuationCount + 1} for workflow ${workflowResult.workflowId}`);
+          
+          // Add current remaining tasks to history for repetition detection
+          if (workflowResult.remainingTasks) {
+            taskHistory.push(...workflowResult.remainingTasks.map(t => t.description));
+          }
+          
+          const continuedResult = await orchestratorService.continueWorkflow(
+            workflowResult.workflowId,
+            workflowResult.remainingTasks,
+            userMessage,
+            conversationHistory,
+            this.alfaProvider,
+            taskHistory // Pass task history for repetition detection
+          );
+          
+          console.log(`🔄 Continuation ${continuationCount + 1} completed:`, {
+            continued: continuedResult.continued,
+            isComplete: continuedResult.isComplete,
+            taskResultsCount: continuedResult.taskResults?.length || 0,
+            agentsCalled: continuedResult.agentsCalled
+          });
+          
+          // Merge results from continuation
+          const originalTaskResults = workflowResult.taskResults || [];
+          const newTaskResults = continuedResult.taskResults || [];
+          const originalAgentsCalled = workflowResult.agentsCalled || [];
+          const newAgentsCalled = continuedResult.agentsCalled || [];
+          
+          workflowResult = {
+            ...workflowResult,
+            taskResults: [...originalTaskResults, ...newTaskResults],
+            isComplete: continuedResult.isComplete,
+            completionPercentage: continuedResult.completionPercentage,
+            remainingTasks: continuedResult.remainingTasks,
+            summary: continuedResult.summary,
+            finalResponse: continuedResult.finalResponse,
+            agentsCalled: [...originalAgentsCalled, ...newAgentsCalled],
+            metadata: {
+              ...workflowResult.metadata,
+              continuations: continuationCount + 1,
+              totalTasks: originalTaskResults.length + newTaskResults.length,
+              successfulTasks: [...originalTaskResults, ...newTaskResults].filter(r => r.success).length,
+              failedTasks: [...originalTaskResults, ...newTaskResults].filter(r => !r.success).length
+            }
+          };
+          
+          continuationCount++;
+          
+          // Check for progress - if no meaningful progress was made, increment no-progress counter
+          const progressMade = workflowResult.completionPercentage > startingPercentage || 
+                              workflowResult.remainingTasks.length < startingTasksCount ||
+                              (continuedResult.agentsCalled && continuedResult.agentsCalled.length > 0) ||
+                              continuedResult.forcedCompletion || // Respect forced completion from repetition detection
+                              continuedResult.earlySuccess; // Respect early success detection
+          
+          // If continuation was forced to complete due to repetition, break the loop
+          if (continuedResult.forcedCompletion || continuedResult.earlySuccess) {
+            console.log(`🛑 Workflow completion forced: ${continuedResult.forcedCompletion ? 'repetition detected' : 'early success'}`);
+            workflowResult.isComplete = true;
+            break;
+          }
+          
+          if (!progressMade) {
+            noProgressCount++;
+            console.log(`⚠️ No progress detected in continuation ${continuationCount} (${noProgressCount}/3 strikes)`);
+          } else {
+            noProgressCount = 0; // Reset if progress was made
+            console.log(`✅ Progress detected in continuation ${continuationCount}`);
+          }
+          
+          console.log(`🔄 Workflow continuation ${continuationCount} completed - ${workflowResult.isComplete ? 'COMPLETE' : 'PARTIAL'} (${workflowResult.completionPercentage}%)`);
+          
+          // Emit continuation progress event
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: workflowResult.isComplete ? 'completed' : 'in-progress',
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              continuationCount: continuationCount,
+              message: workflowResult.isComplete 
+                ? 'All tasks completed successfully!'
+                : `Continuation ${continuationCount} completed (${workflowResult.completionPercentage}% complete)`
+            });
+          }
         }
-      };
-
-      // If agents are mentioned, call them first
-      let agentResponses = {};
-      if (mentionedAgents.length > 0) {
-        agentResponses = await this.callMentionedAgents(mentionedAgents, userMessage, conversationHistory);
-      }
-
-      // Prepare the message for base LLM including agent responses
-      const enhancedMessage = this.buildEnhancedMessage(userMessage, agentResponses, availableAgents);
-
-      // Get response from base LLM (Alfa)
-      const response = await this.alfaProvider.sendMessage(enhancedMessage, context);
-
-      // Check if response has an error
-      if (response.error) {
-        throw new Error(response.message || response.error || 'Unknown error from Alfa provider');
-      }
-
-      // Ensure we have content
-      if (!response.content) {
-        throw new Error('Empty response from Alfa provider');
-      }
-
-      return {
-        content: response.content,
-        metadata: {
-          baseLLM: 'alfa',
-          agentsCalled: mentionedAgents,
-          agentResponses: Object.keys(agentResponses),
-          ...response.metadata
+        
+        if (!workflowResult.isComplete) {
+          let stopReason = '';
+          let stopMessage = '';
+          
+          if (noProgressCount >= 3) {
+            stopReason = 'no-progress';
+            stopMessage = `Workflow stopped after ${noProgressCount} continuations with no progress`;
+            console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped due to lack of progress (${noProgressCount} failed attempts)`);
+          } else if (continuationCount >= maxContinuations) {
+            stopReason = 'max-continuations-reached';
+            stopMessage = `Workflow stopped after ${maxContinuations} iterations to prevent infinite loop`;
+            console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped after ${maxContinuations} continuations to prevent infinite loop`);
+          }
+          
+          // Emit warning event
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: stopReason,
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              continuationCount: continuationCount,
+              message: stopMessage
+            });
+          }
         }
-      };
+
+        // Create enhanced message with workflow results for final response
+        const enhancedMessage = this.buildWorkflowResponseMessage(
+          userMessage,
+          workflowResult,
+          conversationHistory
+        );
+
+        // Get Alfa's final response incorporating workflow results
+        const context = {
+          history: conversationHistory,
+          metadata: {
+            conversationId,
+            timestamp: new Date().toISOString(),
+            workflowId: workflowResult.workflowId,
+            purpose: 'final-response'
+          }
+        };
+
+        const finalResponse = await this.alfaProvider.sendMessage(enhancedMessage, context);
+
+        // Check if response has an error
+        if (finalResponse.error) {
+          throw new Error(finalResponse.message || finalResponse.error || 'Unknown error from Alfa provider');
+        }
+
+        // Return enhanced response with workflow metadata
+        return {
+          content: finalResponse.content,
+          metadata: {
+            baseLLM: 'alfa',
+            orchestrated: true,
+            workflowId: workflowResult.workflowId,
+            agentsCalled: workflowResult.agentsCalled,
+            taskResults: workflowResult.taskResults,
+            isComplete: workflowResult.isComplete,
+            completionPercentage: workflowResult.completionPercentage,
+            remainingTasks: workflowResult.remainingTasks,
+            continuations: continuationCount,
+            ...finalResponse.metadata
+          }
+        };
+      } else {
+        // Handle directly without agents
+        console.log('🔄 Handling request directly without agents');
+
+        // Prepare context for direct handling
+        const context = {
+          history: conversationHistory,
+          metadata: {
+            conversationId,
+            timestamp: new Date().toISOString(),
+            workflowId: workflowResult.workflowId,
+            purpose: 'direct-response'
+          }
+        };
+
+        // Get direct response from Alfa
+        const response = await this.alfaProvider.sendMessage(userMessage, context);
+
+        // Check if response has an error
+        if (response.error) {
+          throw new Error(response.message || response.error || 'Unknown error from Alfa provider');
+        }
+
+        return {
+          content: response.content,
+          metadata: {
+            baseLLM: 'alfa',
+            orchestrated: false,
+            workflowId: workflowResult.workflowId,
+            agentsCalled: [],
+            reasoning: workflowResult.reasoning,
+            ...response.metadata
+          }
+        };
+      }
 
     } catch (error) {
       console.error('❌ Error in base LLM processing:', error.message);
@@ -145,12 +326,74 @@ class BaseLLMService {
         content: "I apologize, but I'm experiencing technical difficulties. Please try again.",
         metadata: {
           error: true,
-          message: error.message
+          message: error.message,
+          orchestrated: false
         }
       };
     }
   }
 
+  /**
+   * Build a message for Alfa that incorporates workflow results
+   * @param {string} originalMessage - Original user message
+   * @param {Object} workflowResult - Results from orchestrator workflow
+   * @param {Array} conversationHistory - Conversation context
+   * @returns {string} Enhanced message for final response
+   */
+  buildWorkflowResponseMessage(originalMessage, workflowResult, conversationHistory) {
+    let message = `The user asked: "${originalMessage}"\n\n`;
+
+    // Add workflow summary
+    if (workflowResult.summary) {
+      message += workflowResult.summary + '\n';
+    }
+
+    // Add task execution details
+    if (workflowResult.taskResults && workflowResult.taskResults.length > 0) {
+      message += "Task Execution Details:\n";
+      workflowResult.taskResults.forEach(result => {
+        if (result.success && result.agent) {
+          message += `✅ ${result.task.description} (${result.agent.name}): ${result.response.content}\n`;
+        } else if (result.success && !result.agent) {
+          message += `✅ ${result.task.description}: ${result.response?.content || 'Task completed'}\n`;
+        } else {
+          message += `❌ ${result.task.description}: ${result.error}\n`;
+        }
+      });
+      message += '\n';
+    }
+
+    // Add completion status
+    if (workflowResult.isComplete) {
+      message += "✅ All requested tasks have been completed successfully.\n\n";
+    } else {
+      message += `⏳ Task completion: ${workflowResult.completionPercentage}%\n`;
+      if (workflowResult.remainingTasks && workflowResult.remainingTasks.length > 0) {
+        message += "Remaining tasks:\n";
+        workflowResult.remainingTasks.forEach(task => {
+          message += `- ${task.description}\n`;
+        });
+        message += '\n';
+      }
+    }
+
+    // Add final instruction for Alfa
+    message += `Please provide a comprehensive response to the user that:
+1. Acknowledges their original request
+2. Summarizes what was accomplished by the agents
+3. Presents the results in a clear, user-friendly format
+4. ${workflowResult.isComplete ? 
+       'Confirms that their request has been fully addressed' : 
+       'Explains what still needs to be done and next steps'}
+
+Be conversational and helpful. Don't just repeat the agent outputs - synthesize them into a coherent response that directly addresses the user's needs.`;
+
+    return message;
+  }
+
+  /**
+   * Legacy method for handling @mentions (kept for backward compatibility)
+   */
   parseMentions(message) {
     const mentionPattern = /@(\w+)/g;
     const mentions = [];
@@ -163,6 +406,9 @@ class BaseLLMService {
     return [...new Set(mentions)]; // Remove duplicates
   }
 
+  /**
+   * Legacy method for getting available agents info (kept for backward compatibility)
+   */
   async getAvailableAgentsInfo() {
     try {
       const agents = await getAllAgents();
@@ -179,6 +425,9 @@ class BaseLLMService {
     }
   }
 
+  /**
+   * Legacy method for calling mentioned agents (kept for backward compatibility)
+   */
   async callMentionedAgents(mentionedAgents, userMessage, conversationHistory) {
     const agentResponses = {};
     
@@ -220,6 +469,9 @@ class BaseLLMService {
     return agentResponses;
   }
 
+  /**
+   * Legacy method for building enhanced messages (kept for backward compatibility)
+   */
   buildEnhancedMessage(originalMessage, agentResponses, availableAgents) {
     let enhancedMessage = originalMessage;
 

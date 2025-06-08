@@ -58,6 +58,12 @@ export function handleSocketConnection(socket, io) {
         isTyping: true
       });
 
+      // Emit workflow started event
+      io.to(conversationId).emit('workflow-started', {
+        conversationId,
+        message: 'Analyzing your request and determining if agents are needed...'
+      });
+
       // Process message through base LLM (Alfa) with timeout
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('LLM response timeout')), 30000);
@@ -126,7 +132,8 @@ async function processBaseLLMResponse(conversation, userMessage, io, conversatio
     const response = await baseLLMService.processMessage(
       userMessage, 
       conversationHistory, 
-      conversationId
+      conversationId,
+      io
     );
 
     // Create Alfa response message
@@ -151,15 +158,31 @@ async function processBaseLLMResponse(conversation, userMessage, io, conversatio
       isTyping: false
     });
 
+    // Emit workflow completion status
+    if (response.metadata?.orchestrated) {
+      io.to(conversationId).emit('workflow-completed', {
+        workflowId: response.metadata.workflowId,
+        isComplete: response.metadata.isComplete,
+        agentsCalled: response.metadata.agentsCalled || [],
+        taskResults: response.metadata.taskResults || [],
+        completionPercentage: response.metadata.completionPercentage || 100,
+        remainingTasks: response.metadata.remainingTasks || []
+      });
+    }
+
     // Broadcast Alfa message
     io.to(conversationId).emit('message-received', alfaMessage);
 
     // Log successful processing
     const agentsCalled = response.metadata?.agentsCalled || [];
-    if (agentsCalled.length > 0) {
-      console.log(`✅ Alfa processed message and called agents: ${agentsCalled.join(', ')}`);
+    if (response.metadata?.orchestrated) {
+      if (agentsCalled.length > 0) {
+        console.log(`✅ Orchestrator workflow completed - called agents: ${agentsCalled.join(', ')}`);
+      } else {
+        console.log(`✅ Orchestrator workflow completed - handled directly by Alfa`);
+      }
     } else {
-      console.log(`✅ Alfa processed message (no agents called)`);
+      console.log(`✅ Alfa processed message (legacy mode)`);
     }
 
   } catch (error) {

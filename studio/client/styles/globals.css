@@ -238,6 +238,12 @@
   @apply line-through text-gray-500 opacity-75;
 }
 
+/* Background patterns for landing page */
+.bg-grid-pattern {
+  background-image: radial-gradient(circle, #e5e7eb 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 /* Table styling improvements */
 .markdown-user table,
 .markdown-agent table {
@@ -279,5 +285,56 @@
   
   input:focus, textarea:focus, select:focus {
     @apply ring-primary-500 border-primary-500;
+  }
+}
+
+/* Mermaid flowchart styling */
+.mermaid-container {
+  @apply w-full overflow-auto;
+}
+
+.mermaid {
+  @apply w-full text-center;
+  font-family: 'trebuchet ms', verdana, arial, sans-serif;
+}
+
+/* Custom Mermaid node styling */
+.mermaid .node rect,
+.mermaid .node circle,
+.mermaid .node polygon {
+  stroke-width: 2px;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+.mermaid .edgePath .path {
+  stroke-width: 2px;
+  marker-end: url(#arrowhead);
+}
+
+.mermaid .edgeLabel {
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+/* Responsive Mermaid sizing */
+@media (max-width: 768px) {
+  .mermaid {
+    font-size: 12px;
+  }
+  
+  .mermaid .edgeLabel {
+    font-size: 10px;
+    padding: 1px 4px;
+  }
+}
+
+/* Dark mode support for Mermaid (if needed later) */
+@media (prefers-color-scheme: dark) {
+  .mermaid .edgeLabel {
+    background-color: rgba(31, 41, 55, 0.9);
+    color: white;
   }
 } 

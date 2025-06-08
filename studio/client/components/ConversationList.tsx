@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, MessageCircle, Trash2, X } from 'lucide-react';
+import { Plus, MessageCircle, Trash2, Trash, Loader } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Conversation {
@@ -23,6 +23,7 @@ export default function ConversationList({
 }: ConversationListProps) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
 
   useEffect(() => {
     loadConversations();
@@ -105,6 +106,35 @@ export default function ConversationList({
     }
   };
 
+  const cleanupEmptyConversations = async () => {
+    try {
+      setIsCleaningUp(true);
+      
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/conversations/cleanup/empty`, {
+        method: 'POST'
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        
+        if (result.deletedCount > 0) {
+          // Reload conversations after cleanup
+          await loadConversations();
+          toast.success(`Deleted ${result.deletedCount} empty conversation${result.deletedCount === 1 ? '' : 's'}`);
+        } else {
+          toast.success('No empty conversations found');
+        }
+      } else {
+        throw new Error('Failed to cleanup empty conversations');
+      }
+    } catch (error) {
+      console.error('Error cleaning up conversations:', error);
+      toast.error('Failed to cleanup empty conversations');
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-3 sm:p-4">
@@ -119,13 +149,31 @@ export default function ConversationList({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="p-3 sm:p-4 border-b border-gray-200">
+      <div className="p-3 sm:p-4 border-b border-gray-200 space-y-2">
         <button
           onClick={createNewConversation}
           className="w-full btn-primary flex items-center justify-center text-sm sm:text-base py-2 sm:py-2"
         >
           <Plus className="w-4 h-4 mr-2" />
           New Chat
+        </button>
+        
+        <button
+          onClick={cleanupEmptyConversations}
+          disabled={isCleaningUp}
+          className="w-full btn-secondary flex items-center justify-center text-xs sm:text-sm py-1.5 sm:py-1.5 text-gray-600"
+        >
+          {isCleaningUp ? (
+            <>
+              <Loader className="w-3 h-3 mr-2 animate-spin" />
+              Cleaning up...
+            </>
+          ) : (
+            <>
+              <Trash className="w-3 h-3 mr-2" />
+              Delete Empty Conversations
+            </>
+          )}
         </button>
       </div>
 
@@ -157,6 +205,9 @@ export default function ConversationList({
                     </h3>
                     <p className="text-xs text-gray-400 mt-1">
                       {new Date(conversation.updatedAt).toLocaleDateString()}
+                      {(!conversation.messages || conversation.messages.length === 0) && (
+                        <span className="ml-2 text-xs text-gray-400">(empty)</span>
+                      )}
                     </p>
                   </div>
                   

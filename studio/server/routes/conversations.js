@@ -6,8 +6,12 @@ import {
   getAllConversations, 
   deleteConversation 
 } from '../utils/storage.js';
+import cleanupEmptyConversations from '../utils/cleanupEmptyConversations.js';
 
 const router = express.Router();
+
+// In-memory storage for empty conversations that haven't been saved yet
+const pendingConversations = new Map();
 
 // Get all conversations
 router.get('/', async (req, res) => {
@@ -23,7 +27,14 @@ router.get('/', async (req, res) => {
 // Get a specific conversation
 router.get('/:id', async (req, res) => {
   try {
-    const conversation = await getConversation(req.params.id);
+    const conversationId = req.params.id;
+    
+    // Check if this is a pending conversation that hasn't been saved yet
+    if (pendingConversations.has(conversationId)) {
+      return res.json(pendingConversations.get(conversationId));
+    }
+    
+    const conversation = await getConversation(conversationId);
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
@@ -48,7 +59,11 @@ router.post('/', async (req, res) => {
       updatedAt: new Date().toISOString()
     };
 
+    // Save the conversation to disk
     const savedConversation = await saveConversation(conversation);
+    // Remove from pending if it was added (cleanup)
+    pendingConversations.delete(conversation.id);
+    // Return the persisted conversation object to the client
     res.status(201).json(savedConversation);
   } catch (error) {
     console.error('Error creating conversation:', error);
@@ -62,6 +77,29 @@ router.put('/:id', async (req, res) => {
     const conversationId = req.params.id;
     const updates = req.body;
     
+    // Check if this is a pending conversation that hasn't been saved yet
+    if (pendingConversations.has(conversationId)) {
+      const pendingConversation = pendingConversations.get(conversationId);
+      const updatedConversation = {
+        ...pendingConversation,
+        ...updates,
+        id: conversationId, // Ensure ID doesn't change
+        updatedAt: new Date().toISOString()
+      };
+      
+      // If it now has messages, save it to disk and remove from pending
+      if (updatedConversation.messages && updatedConversation.messages.length > 0) {
+        const savedConversation = await saveConversation(updatedConversation);
+        pendingConversations.delete(conversationId);
+        return res.json(savedConversation);
+      } else {
+        // Otherwise just update it in memory
+        pendingConversations.set(conversationId, updatedConversation);
+        return res.json(updatedConversation);
+      }
+    }
+    
+    // Otherwise handle normally for conversations already saved to disk
     const existingConversation = await getConversation(conversationId);
     if (!existingConversation) {
       return res.status(404).json({ error: 'Conversation not found' });
@@ -85,7 +123,15 @@ router.put('/:id', async (req, res) => {
 // Delete a conversation
 router.delete('/:id', async (req, res) => {
   try {
-    const deleted = await deleteConversation(req.params.id);
+    const conversationId = req.params.id;
+    
+    // Check if this is a pending conversation that hasn't been saved yet
+    if (pendingConversations.has(conversationId)) {
+      pendingConversations.delete(conversationId);
+      return res.json({ message: 'Conversation deleted successfully' });
+    }
+    
+    const deleted = await deleteConversation(conversationId);
     if (!deleted) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
@@ -102,7 +148,14 @@ router.post('/:id/messages', async (req, res) => {
     const conversationId = req.params.id;
     const { content, sender, type = 'user', agentId = null } = req.body;
     
-    const conversation = await getConversation(conversationId);
+    // Check if this is a pending conversation that hasn't been saved yet
+    let conversation;
+    if (pendingConversations.has(conversationId)) {
+      conversation = pendingConversations.get(conversationId);
+    } else {
+      conversation = await getConversation(conversationId);
+    }
+    
     if (!conversation) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
@@ -119,11 +172,35 @@ router.post('/:id/messages', async (req, res) => {
     conversation.messages.push(message);
     conversation.updatedAt = new Date().toISOString();
 
+    // If this was a pending conversation, move it to permanent storage
+    if (pendingConversations.has(conversationId)) {
+      pendingConversations.delete(conversationId);
+    }
+    
+    // Save the conversation with the new message
     const savedConversation = await saveConversation(conversation);
     res.status(201).json({ message, conversation: savedConversation });
   } catch (error) {
     console.error('Error adding message:', error);
     res.status(500).json({ error: 'Failed to add message' });
+  }
+});
+
+// Cleanup empty conversations
+router.post('/cleanup/empty', async (req, res) => {
+  try {
+    const count = await cleanupEmptyConversations();
+    res.json({ 
+      success: true, 
+      message: `Successfully deleted ${count} empty conversations`,
+      deletedCount: count
+    });
+  } catch (error) {
+    console.error('Error cleaning up empty conversations:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to clean up empty conversations' 
+    });
   }
 });
 
