@@ -69,7 +69,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
   const [showFlowchartModal, setShowFlowchartModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -262,7 +262,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     setInputMessage(value);
 
@@ -585,9 +585,8 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
             </div>
             <div className="flex items-stretch space-x-2 sm:space-x-3">
               <div className="flex-1 relative">
-                <input
+                <textarea
                   ref={inputRef}
-                  type="text"
                   value={inputMessage}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyPress}

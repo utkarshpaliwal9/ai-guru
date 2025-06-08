@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight, oneDark } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import { toast } from 'react-hot-toast';
+import rehypeRaw from 'rehype-raw';
 
 interface Message {
   id: string;
@@ -23,6 +24,11 @@ interface MessageBubbleProps {
   onGenerateFlowchart?: (content: string) => void;
   onExportWorkflow?: (content: string) => void;
 }
+
+// Helper to wrap @mentions in spans for styling
+const highlightMentions = (text: string) => {
+  return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+};
 
 export default function MessageBubble({ message, onGenerateFlowchart, onExportWorkflow }: MessageBubbleProps) {
   const formatTimestamp = (timestamp: string) => {
@@ -284,12 +290,13 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
             isUser ? 'text-white' : 'text-gray-900'
           }`}>
             <div className="prose prose-sm max-w-none">
-              <ReactMarkdown 
+              <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
                 components={markdownComponents}
                 className={isUser ? 'markdown-user' : 'markdown-agent'}
               >
-                {message.content}
+                {highlightMentions(message.content)}
               </ReactMarkdown>
             </div>
           </div>
