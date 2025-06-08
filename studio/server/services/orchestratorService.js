@@ -169,7 +169,7 @@ If no actionable tasks are detected, return hasActionableTasks: false with empty
     // Create summary of task results
     const taskSummary = taskResults.map(result => ({
       description: result.task.description,
-      agent: result.agent.name,
+      agent: result.agent ? result.agent.name : 'Unknown Agent',
       success: result.success,
       response: result.success ? result.response.content : result.error
     }));
@@ -228,7 +228,8 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
     if (completedTasks.length > 0) {
       summary += "### ✅ Completed Tasks:\n";
       completedTasks.forEach(result => {
-        summary += `- **${result.task.description}** (via ${result.agent.name})\n`;
+        const agentName = result.agent ? result.agent.name : 'Unknown Agent';
+        summary += `- **${result.task.description}** (via ${agentName})\n`;
         summary += `  Result: ${result.response.content}\n\n`;
       });
     }
@@ -238,7 +239,8 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
     if (failedTasks.length > 0) {
       summary += "### ❌ Failed Tasks:\n";
       failedTasks.forEach(result => {
-        summary += `- **${result.task.description}** (via ${result.agent.name})\n`;
+        const agentName = result.agent ? result.agent.name : 'Unknown Agent';
+        summary += `- **${result.task.description}** (via ${agentName})\n`;
         summary += `  Error: ${result.error}\n\n`;
       });
     }
@@ -411,7 +413,7 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
         remainingTasks: completionResult.remainingTasks || [],
         summary: workflowSummary,
         finalResponse: completionResult.finalResponse,
-        agentsCalled: taskResults.filter(r => r.success).map(r => r.agent.name),
+        agentsCalled: taskResults.filter(r => r.success && r.agent).map(r => r.agent.name),
         metadata: {
           originalMessage: userMessage,
           totalTasks: taskResults.length,
@@ -530,7 +532,7 @@ If the request is fully complete, set isComplete: true and empty remainingTasks 
       remainingTasks: completionResult.remainingTasks || [],
       summary: workflowSummary,
       finalResponse: completionResult.finalResponse,
-      agentsCalled: taskResults.filter(r => r.success).map(r => r.agent.name)
+      agentsCalled: taskResults.filter(r => r.success && r.agent).map(r => r.agent.name)
     };
   }
 }

@@ -72,7 +72,7 @@ class BaseLLMService {
     }
   }
 
-  async processMessage(userMessage, conversationHistory = [], conversationId) {
+  async processMessage(userMessage, conversationHistory = [], conversationId, io = null) {
     if (!this.initialized) {
       await this.initialize();
     }
@@ -81,7 +81,7 @@ class BaseLLMService {
       console.log(`🎯 Processing message with orchestrator: "${userMessage}"`);
 
       // Use the new orchestrator workflow
-      const workflowResult = await orchestratorService.orchestrateWorkflow(
+      let workflowResult = await orchestratorService.orchestrateWorkflow(
         userMessage,
         conversationHistory,
         this.alfaProvider
@@ -91,6 +91,99 @@ class BaseLLMService {
 
       // If the orchestrator determined agents are needed
       if (workflowResult.requiresAgents) {
+        // Continue workflow until completion if it's not complete
+        let maxContinuations = 5; // Prevent infinite loops
+        let continuationCount = 0;
+        
+        while (!workflowResult.isComplete && continuationCount < maxContinuations) {
+          console.log(`🔄 Workflow ${workflowResult.workflowId} not complete (${workflowResult.completionPercentage}%), continuing with ${workflowResult.remainingTasks.length} remaining tasks...`);
+          
+          // Emit progress event if io is available
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: 'continuing',
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              message: `Processing additional tasks... (${workflowResult.completionPercentage}% complete)`
+            });
+          }
+          
+          console.log(`🔄 Starting continuation ${continuationCount + 1} for workflow ${workflowResult.workflowId}`);
+          
+          const continuedResult = await orchestratorService.continueWorkflow(
+            workflowResult.workflowId,
+            workflowResult.remainingTasks,
+            userMessage,
+            conversationHistory,
+            this.alfaProvider
+          );
+          
+          console.log(`🔄 Continuation ${continuationCount + 1} completed:`, {
+            continued: continuedResult.continued,
+            isComplete: continuedResult.isComplete,
+            taskResultsCount: continuedResult.taskResults?.length || 0,
+            agentsCalled: continuedResult.agentsCalled
+          });
+          
+          // Merge results from continuation
+          const originalTaskResults = workflowResult.taskResults || [];
+          const newTaskResults = continuedResult.taskResults || [];
+          const originalAgentsCalled = workflowResult.agentsCalled || [];
+          const newAgentsCalled = continuedResult.agentsCalled || [];
+          
+          workflowResult = {
+            ...workflowResult,
+            taskResults: [...originalTaskResults, ...newTaskResults],
+            isComplete: continuedResult.isComplete,
+            completionPercentage: continuedResult.completionPercentage,
+            remainingTasks: continuedResult.remainingTasks,
+            summary: continuedResult.summary,
+            finalResponse: continuedResult.finalResponse,
+            agentsCalled: [...originalAgentsCalled, ...newAgentsCalled],
+            metadata: {
+              ...workflowResult.metadata,
+              continuations: continuationCount + 1,
+              totalTasks: originalTaskResults.length + newTaskResults.length,
+              successfulTasks: [...originalTaskResults, ...newTaskResults].filter(r => r.success).length,
+              failedTasks: [...originalTaskResults, ...newTaskResults].filter(r => !r.success).length
+            }
+          };
+          
+          continuationCount++;
+          console.log(`🔄 Workflow continuation ${continuationCount} completed - ${workflowResult.isComplete ? 'COMPLETE' : 'PARTIAL'} (${workflowResult.completionPercentage}%)`);
+          
+          // Emit continuation progress event
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: workflowResult.isComplete ? 'completed' : 'in-progress',
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              continuationCount: continuationCount,
+              message: workflowResult.isComplete 
+                ? 'All tasks completed successfully!'
+                : `Continuation ${continuationCount} completed (${workflowResult.completionPercentage}% complete)`
+            });
+          }
+        }
+        
+        if (!workflowResult.isComplete && continuationCount >= maxContinuations) {
+          console.log(`⚠️ Workflow ${workflowResult.workflowId} stopped after ${maxContinuations} continuations to prevent infinite loop`);
+          
+          // Emit warning event
+          if (io && conversationId) {
+            io.to(conversationId).emit('workflow-progress', {
+              workflowId: workflowResult.workflowId,
+              status: 'max-continuations-reached',
+              completionPercentage: workflowResult.completionPercentage,
+              remainingTasks: workflowResult.remainingTasks.length,
+              continuationCount: continuationCount,
+              message: `Workflow stopped after ${maxContinuations} iterations to prevent infinite loop`
+            });
+          }
+        }
+
         // Create enhanced message with workflow results for final response
         const enhancedMessage = this.buildWorkflowResponseMessage(
           userMessage,
@@ -128,6 +221,7 @@ class BaseLLMService {
             isComplete: workflowResult.isComplete,
             completionPercentage: workflowResult.completionPercentage,
             remainingTasks: workflowResult.remainingTasks,
+            continuations: continuationCount,
             ...finalResponse.metadata
           }
         };
@@ -212,8 +306,10 @@ class BaseLLMService {
     if (workflowResult.taskResults && workflowResult.taskResults.length > 0) {
       message += "Task Execution Details:\n";
       workflowResult.taskResults.forEach(result => {
-        if (result.success) {
+        if (result.success && result.agent) {
           message += `✅ ${result.task.description} (${result.agent.name}): ${result.response.content}\n`;
+        } else if (result.success && !result.agent) {
+          message += `✅ ${result.task.description}: ${result.response?.content || 'Task completed'}\n`;
         } else {
           message += `❌ ${result.task.description}: ${result.error}\n`;
         }

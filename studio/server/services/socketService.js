@@ -132,7 +132,8 @@ async function processBaseLLMResponse(conversation, userMessage, io, conversatio
     const response = await baseLLMService.processMessage(
       userMessage, 
       conversationHistory, 
-      conversationId
+      conversationId,
+      io
     );
 
     // Create Alfa response message
