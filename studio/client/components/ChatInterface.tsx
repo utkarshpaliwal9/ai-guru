@@ -7,6 +7,8 @@ import MessageBubble from './MessageBubble';
 import TypingIndicator from './TypingIndicator';
 import IntegratedLanding from './IntegratedLanding';
 import FlowchartGenerator from './FlowchartGenerator';
+import { MentionsInput, Mention } from 'react-mentions';
+import styles from './mentionStyles';
 
 interface Message {
   id: string;
@@ -60,18 +62,15 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   const [isLoading, setIsLoading] = useState(false);
   const [typingAgents, setTypingAgents] = useState<AgentTyping[]>([]);
   const [availableAgents, setAvailableAgents] = useState<Agent[]>([]);
-  const [showAgentSuggestions, setShowAgentSuggestions] = useState(false);
-  const [agentSuggestions, setAgentSuggestions] = useState<Agent[]>([]);
-  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [showConversationDropdown, setShowConversationDropdown] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
   const [showFlowchartModal, setShowFlowchartModal] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const [mentionData, setMentionData] = useState<any[]>([]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -84,80 +83,27 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowConversationDropdown(false);
       }
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowAgentSuggestions(false);
-        setSelectedSuggestionIndex(0);
-      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Reset selected suggestion index when suggestions change
-  useEffect(() => {
-    setSelectedSuggestionIndex(0);
-  }, [agentSuggestions]);
-
-  // Socket event handlers
-  useEffect(() => {
-    if (!socket || !conversationId) return;
-
-    // Join the conversation room
-    socket.emit('join-conversation', conversationId);
-
-    // Listen for new messages
-    const handleMessageReceived = (message: Message) => {
-      setMessages(prev => [...prev, message]);
-      setIsLoading(false);
-    };
-
-    // Listen for agent typing indicators
-    const handleAgentTyping = (data: AgentTyping) => {
-      setTypingAgents(prev => {
-        const filtered = prev.filter(agent => agent.agentId !== data.agentId);
-        if (data.isTyping) {
-          return [...filtered, data];
-        }
-        return filtered;
-      });
-    };
-
-    // Listen for errors
-    const handleError = (error: { message: string }) => {
-      toast.error(error.message);
-      setIsLoading(false);
-    };
-
-    socket.on('message-received', handleMessageReceived);
-    socket.on('agent-typing', handleAgentTyping);
-    socket.on('error', handleError);
-
-    // Cleanup on unmount or conversation change
-    return () => {
-      socket.off('message-received', handleMessageReceived);
-      socket.off('agent-typing', handleAgentTyping);
-      socket.off('error', handleError);
-      socket.emit('leave-conversation', conversationId);
-    };
-  }, [socket, conversationId]);
-
-  // Load conversation messages when conversation changes
-  useEffect(() => {
-    if (!conversationId) {
-      setMessages([]);
-      return;
-    }
-
-    // Load conversation history
-    loadConversationHistory(conversationId);
-  }, [conversationId]);
-
   // Load available agents and conversations
   useEffect(() => {
     loadAvailableAgents();
     loadConversations();
   }, []);
+
+  useEffect(() => {
+    if (availableAgents.length > 0) {
+      setMentionData(availableAgents.map(agent => ({
+        ...agent,
+        id: agent.name,
+        display: `@${agent.name}`,
+      })));
+    }
+  }, [availableAgents]);
 
   const loadAvailableAgents = async () => {
     try {
@@ -262,63 +208,8 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setInputMessage(value);
-
-    // Check for agent mentions
-    const lastAtIndex = value.lastIndexOf('@');
-    if (lastAtIndex !== -1) {
-      const afterAt = value.substring(lastAtIndex + 1);
-      const spaceIndex = afterAt.indexOf(' ');
-      const searchTerm = spaceIndex === -1 ? afterAt : afterAt.substring(0, spaceIndex);
-      
-      if (spaceIndex === -1) {
-        // Show suggestions when @ is typed (even without additional characters)
-        let filtered = availableAgents;
-        
-        if (searchTerm.length > 0) {
-          // Filter by search term if provided
-          filtered = availableAgents.filter(agent => 
-            agent.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            agent.description.toLowerCase().includes(searchTerm.toLowerCase())
-          );
-        }
-        
-        setAgentSuggestions(filtered);
-        setShowAgentSuggestions(filtered.length > 0);
-        setSelectedSuggestionIndex(0);
-      } else {
-        setShowAgentSuggestions(false);
-        setSelectedSuggestionIndex(0);
-      }
-    } else {
-      setShowAgentSuggestions(false);
-      setSelectedSuggestionIndex(0);
-    }
-  };
-
-  const selectAgent = (agent: Agent) => {
-    const lastAtIndex = inputMessage.lastIndexOf('@');
-    if (lastAtIndex !== -1) {
-      const beforeAt = inputMessage.substring(0, lastAtIndex);
-      const afterAt = inputMessage.substring(lastAtIndex + 1);
-      const spaceIndex = afterAt.indexOf(' ');
-      const afterMention = spaceIndex === -1 ? ' ' : afterAt.substring(spaceIndex);
-      
-      setInputMessage(`${beforeAt}@${agent.name}${afterMention}`);
-      setShowAgentSuggestions(false);
-      setSelectedSuggestionIndex(0);
-      
-      // Set cursor position after the mention
-      setTimeout(() => {
-        const newPosition = beforeAt.length + agent.name.length + 2; // +2 for @ and space
-        if (inputRef.current) {
-          inputRef.current.setSelectionRange(newPosition, newPosition);
-          inputRef.current.focus();
-        }
-      }, 0);
-    }
+  const handleInputChange = (e: any, newValue: string) => {
+    setInputMessage(newValue);
   };
 
   const sendMessage = () => {
@@ -327,7 +218,6 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     const messageContent = inputMessage.trim();
     setInputMessage('');
     setIsLoading(true);
-    setShowAgentSuggestions(false);
 
     // Send message via socket
     socket.emit('send-message', {
@@ -393,43 +283,50 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (showAgentSuggestions && agentSuggestions.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev < agentSuggestions.length - 1 ? prev + 1 : 0
-        );
-        return;
-      }
-      
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedSuggestionIndex(prev => 
-          prev > 0 ? prev - 1 : agentSuggestions.length - 1
-        );
-        return;
-      }
-      
-      if (e.key === 'Tab' || e.key === 'Enter') {
-        e.preventDefault();
-        if (agentSuggestions[selectedSuggestionIndex]) {
-          selectAgent(agentSuggestions[selectedSuggestionIndex]);
-        }
-        return;
-      }
-      
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowAgentSuggestions(false);
-        setSelectedSuggestionIndex(0);
-        return;
-      }
-    }
-    
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
+    if (e.key === 'Enter' && !e.shiftKey && !e.defaultPrevented) {
       sendMessage();
+      e.preventDefault();
     }
+  };
+
+  const renderSuggestion = (suggestion: any, search: string, highlightedDisplay: React.ReactNode, index: number, focused: boolean) => {
+    const agent = suggestion;
+    return (
+      <div className={`w-full px-3 py-2 text-left flex items-center space-x-3 transition-colors ${
+          focused
+            ? 'bg-blue-50 border-l-2 border-blue-500'
+            : 'hover:bg-gray-50'
+        }`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+          agent.providerType === 'mcp'
+            ? 'bg-blue-100'
+            : 'bg-green-100'
+        }`}>
+          <Bot className={`w-4 h-4 ${
+            agent.providerType === 'mcp'
+              ? 'text-blue-600'
+              : 'text-green-600'
+          }`} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium text-gray-900">
+            {highlightedDisplay}
+          </div>
+          <div className="text-xs text-gray-500 truncate">
+            {agent.description}
+          </div>
+        </div>
+        <div className="flex-shrink-0">
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            agent.providerType === 'mcp'
+              ? 'bg-blue-100 text-blue-800'
+              : 'bg-green-100 text-green-800'
+          }`}>
+            {agent.providerType === 'mcp' ? 'MCP' : 'API'}
+          </span>
+        </div>
+      </div>
+    );
   };
 
   const highlightMentions = (text: string) => {
@@ -581,78 +478,33 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
           {/* Input */}
           <div className="bg-white border-t border-gray-200 p-3 sm:p-4 flex-shrink-0">
             <div className="mb-2 text-xs text-gray-500 hidden sm:block">
-              Press Enter to send, Shift+Enter for new line • Type @ to mention agents • Use ↑↓ to navigate, Tab/Enter to select
+              Press Enter to send, Shift+Enter for new line • Type @ to mention agents
             </div>
             <div className="flex items-stretch space-x-2 sm:space-x-3">
               <div className="flex-1 relative">
-                <textarea
-                  ref={inputRef}
+                <MentionsInput
+                  inputRef={inputRef}
                   value={inputMessage}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyPress}
                   placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none box-border"
+                  className="mentions"
+                  style={styles}
                   disabled={isLoading}
-                />
-              
-                {/* Agent Suggestions Dropdown */}
-                {showAgentSuggestions && agentSuggestions.length > 0 && (
-                  <div 
-                    ref={suggestionsRef}
-                    className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-30"
-                  >
-                    <div className="py-1">
-                      {agentSuggestions.map((agent, index) => (
-                        <button
-                          key={agent.id}
-                          onClick={() => selectAgent(agent)}
-                          className={`w-full px-3 py-2 text-left flex items-center space-x-3 transition-colors ${
-                            index === selectedSuggestionIndex 
-                              ? 'bg-blue-50 border-l-2 border-blue-500' 
-                              : 'hover:bg-gray-50'
-                          }`}
-                          onMouseEnter={() => setSelectedSuggestionIndex(index)}
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            agent.providerType === 'mcp' 
-                              ? 'bg-blue-100' 
-                              : 'bg-green-100'
-                          }`}>
-                            <Bot className={`w-4 h-4 ${
-                              agent.providerType === 'mcp' 
-                                ? 'text-blue-600' 
-                                : 'text-green-600'
-                            }`} />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium text-gray-900">
-                              @{agent.name}
-                            </div>
-                            <div className="text-xs text-gray-500 truncate">
-                              {agent.description}
-                            </div>
-                          </div>
-                          <div className="flex-shrink-0">
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              agent.providerType === 'mcp' 
-                                ? 'bg-blue-100 text-blue-800' 
-                                : 'bg-green-100 text-green-800'
-                            }`}>
-                              {agent.providerType === 'mcp' ? 'MCP' : 'API'}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                    
-                    {/* Helpful hint */}
-                    <div className="px-3 py-2 border-t border-gray-100 bg-gray-50">
-                      <div className="text-xs text-gray-500">
-                        Use ↑↓ arrows to navigate • Tab or Enter to select • Esc to close
-                      </div>
-                    </div>
-                  </div>
-                )}
+                  a11ySuggestionsListLabel={"Suggested mentions"}
+                >
+                  <Mention
+                    trigger="@"
+                    data={mentionData}
+                    renderSuggestion={renderSuggestion}
+                    appendSpaceOnAdd={true}
+                    style={{
+                      backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                      borderRadius: '0.25rem',
+                      padding: '2px 0'
+                    }}
+                  />
+                </MentionsInput>
               </div>
               <button
                 onClick={sendMessage}
