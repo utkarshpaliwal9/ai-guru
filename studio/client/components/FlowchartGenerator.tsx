@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ReactFlow, {
   useNodesState,
   useEdgesState,
@@ -9,7 +9,7 @@ import ReactFlow, {
   MarkerType,
 } from 'reactflow';
 import { motion } from 'framer-motion';
-import { Bot, GitBranch, Zap, AlertCircle, Download, RefreshCw } from 'lucide-react';
+import { Bot, GitBranch, Zap, AlertCircle, Download, RefreshCw, Maximize, Minimize } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { toPng } from 'html-to-image';
 
@@ -80,6 +80,8 @@ export default function FlowchartGenerator({ input, availableAgents }: Flowchart
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flowchartTitle, setFlowchartTitle] = useState('Workflow Flowchart');
+  const [isFullScreen, setIsFullScreen] = useState(false);
+  const flowchartContainerRef = useRef<HTMLDivElement>(null);
 
   const onConnect = useCallback((params: any) => setEdges((eds) => addEdge(params, eds)), [setEdges]);
 
@@ -105,6 +107,28 @@ export default function FlowchartGenerator({ input, availableAgents }: Flowchart
         setIsGenerating(false);
     }
   }, [input, availableAgents, setNodes, setEdges]);
+
+  const toggleFullScreen = () => {
+    if (!flowchartContainerRef.current) return;
+
+    if (!document.fullscreenElement) {
+        flowchartContainerRef.current.requestFullscreen().catch(err => {
+            toast.error(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        });
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        }
+    }
+  };
+
+  useEffect(() => {
+    const handleFullScreenChange = () => {
+        setIsFullScreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullScreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullScreenChange);
+  }, []);
 
   useEffect(() => {
     generateFlowchart();
@@ -194,10 +218,18 @@ export default function FlowchartGenerator({ input, availableAgents }: Flowchart
             >
                 <Download className="w-4 h-4" />
             </button>
+            <button
+                onClick={toggleFullScreen}
+                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                title={isFullScreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            >
+                {isFullScreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
+            </button>
           </div>
         </div>
 
         <motion.div
+            ref={flowchartContainerRef}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             className="w-full h-[75vh] bg-slate-50 border rounded-lg"
@@ -237,10 +269,21 @@ const parseUserInput = (text: string, availableAgents: Agent[]) => {
     let nodeCounter = 1;
 
     // Start Node
-    nodes.push({ id: 'START', type: 'input', data: { label: 'User Request' }, position: { x: 0, y: 0 }, sourcePosition: Position.Bottom });
+    nodes.push({ id: 'START', type: 'input', data: { label: 'User prompt' }, position: { x: 0, y: 0 }, sourcePosition: Position.Bottom });
 
     // Orchestrator Node
-    nodes.push({ id: 'ALFA', data: { label: '🧠 Alfa LLM Orchestrator' }, position: { x: 0, y: 0 }, sourcePosition: Position.Bottom, targetPosition: Position.Top });
+    nodes.push({
+      id: 'ALFA',
+      data: { label: '🧠 Alfa' },
+      position: { x: 0, y: 0 },
+      sourcePosition: Position.Bottom,
+      targetPosition: Position.Top,
+      style: {
+        backgroundColor: '#f5f3ff', // violet-100
+        borderColor: '#8b5cf6', // violet-500
+        borderWidth: 2,
+      }
+    });
     edges.push({ id: 'e-start-alfa', source: 'START', target: 'ALFA', label: 'Analyzes Request', markerEnd: { type: MarkerType.ArrowClosed } });
 
     let lastNodeId = 'ALFA';
@@ -252,9 +295,21 @@ const parseUserInput = (text: string, availableAgents: Agent[]) => {
         const agentId = `AGENT_${nodeCounter++}`;
         const label = agent ? `${getAgentIcon(agent.providerType)} ${agent.name}` : `${getAgentIcon(agentNameOrType)} ${agentNameOrType}`;
         
-        nodes.push({ id: agentId, type: 'agent', data: { label }, position: { x: 0, y: 0 }, sourcePosition: Position.Bottom, targetPosition: Position.Top });
-        edges.push({ id: `e-alfa-${agentId}`, source: 'ALFA', target: agentId, label: 'Delegates Task', markerEnd: { type: MarkerType.ArrowClosed } });
-        edges.push({ id: `e-${agentId}-alfa`, source: agentId, target: 'ALFA', label: 'Returns Data', animated: true, markerEnd: { type: MarkerType.ArrowClosed } });
+        nodes.push({
+          id: agentId,
+          type: 'agent',
+          data: { label },
+          position: { x: 0, y: 0 },
+          sourcePosition: Position.Bottom,
+          targetPosition: Position.Top,
+          style: {
+            backgroundColor: '#eff6ff', // blue-100
+            borderColor: '#3b82f6', // blue-500
+            borderWidth: 2,
+          }
+        });
+        edges.push({ id: `e-alfa-${agentId}`, source: 'ALFA', target: agentId, markerEnd: { type: MarkerType.ArrowClosed } });
+        edges.push({ id: `e-${agentId}-alfa`, source: agentId, target: 'ALFA', animated: true, markerEnd: { type: MarkerType.ArrowClosed } });
     });
 
     if (hasConditionalLogic(text)) {
