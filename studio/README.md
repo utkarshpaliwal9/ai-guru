@@ -82,6 +82,41 @@ This will start:
 - Backend server on `http://localhost:5000`
 - Frontend application on `http://localhost:3000`
 
+## 📦 Production Deployment
+
+To run the application in a production environment, follow these steps:
+
+1.  **Build the Frontend:**
+    Navigate to the `client` directory and build the Next.js application.
+    ```bash
+    cd client
+    npm run build
+    ```
+
+2.  **Configure Environment Variables:**
+    In the `server` directory, create a `.env` file for production. Key variables include:
+    ```env
+    # server/.env
+    NODE_ENV=production
+    PORT=5001 # Your desired production port
+    CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
+    
+    # Alfa AI Credentials (Required)
+    ALFA_AUTH_TOKEN=your-production-auth-token
+    ALFA_PROJECT_ID=your-production-project-id
+    ALFA_CHAT_HOST=https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io
+    ALFA_API_HOST=https://clip-api.gamma.qa.us-west-2.aws.avalara.io
+    ALFA_MODEL=gpt-4o-mini
+    ```
+    `CORS_ALLOWED_ORIGINS` is a comma-separated list of URLs that are allowed to make requests to your server. This is critical for security.
+
+3.  **Start the Server:**
+    From the project root, use the `start` script:
+    ```bash
+    npm start
+    ```
+    This will start the Node.js server in production mode. The server is configured to handle API requests and serve the built client application.
+
 ## 🎮 Usage Guide
 
 ### 1. Creating Your First Agent
@@ -134,6 +169,8 @@ This platform requires **Avalara's Alfa AI** credentials to function. Without th
 # Server Configuration
 PORT=5000
 NODE_ENV=development
+# For production, a comma-separated list of allowed domains.
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
 
 # Alfa AI Configuration (REQUIRED)
 ALFA_AUTH_TOKEN=your-auth-token-here

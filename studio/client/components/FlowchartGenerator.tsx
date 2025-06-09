@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bot, GitBranch, Zap, AlertCircle, Copy, Download, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -47,20 +47,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
   const [error, setError] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (input.trim()) {
-      generateFlowchart();
-    }
-  }, [input, availableAgents]);
-
-  // Render Mermaid diagram when mermaidCode changes
-  useEffect(() => {
-    if (mermaidCode && containerRef.current) {
-      mermaid.run({ nodes: [containerRef.current] });
-    }
-  }, [mermaidCode]);
-
-  const parseUserInput = (text: string): FlowchartData => {
+  const parseUserInput = useCallback((text: string): FlowchartData => {
     const mentionedAgents = new Set<string>();
     const agentMatches = text.match(/@(\w+)/g);
     
@@ -191,7 +178,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
 
     // Add end node
     nodes.push({
-      id: 'END',
+      id: 'FINAL_RESPONSE',
       label: 'Response to User',
       type: 'end',
       shape: 'stadium'
@@ -199,62 +186,156 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
 
     edges.push({
       from: 'ALFA',
-      to: 'END',
-      label: 'Final Response'
+      to: 'FINAL_RESPONSE',
+      label: 'Generates Final Output'
     });
-
+    
     return {
       nodes,
       edges,
       title: generateFlowchartTitle(text)
     };
-  };
+  }, [availableAgents]);
+
+  const generateMermaidCode = useCallback((data: FlowchartData): string => {
+    const codeLines = ['graph TD'];
+    
+    // Definitions
+    codeLines.push('  classDef alfa fill:#F9E79F,stroke:#333,stroke-width:2px;');
+    codeLines.push('  classDef agent fill:#D5F5E3,stroke:#333,stroke-width:2px;');
+    codeLines.push('  classDef decision fill:#FCF3CF,stroke:#333,stroke-width:2px;');
+    codeLines.push('  classDef start fill:#D6EAF8,stroke:#333,stroke-width:2px;');
+    codeLines.push('  classDef end_node fill:#D6EAF8,stroke:#333,stroke-width:2px;');
+    codeLines.push('  classDef data fill:#EADCF5,stroke:#333,stroke-width:2px;');
+    codeLines.push('');
+
+    // Nodes and their classes
+    data.nodes.forEach(node => {
+      let shape, label;
+      switch (node.shape) {
+        case 'stadium':
+          shape = ['([', '])'];
+          break;
+        case 'hexagon':
+          shape = ['{{', '}}'];
+          break;
+        case 'diamond':
+          shape = ['{', '}'];
+          break;
+        default:
+          shape = ['[', ']'];
+      }
+      label = node.label.replace(/"/g, '#quot;');
+      codeLines.push(`  ${node.id}${shape[0]}"${label}"${shape[1]}`);
+      const className = node.type === 'end' ? 'end_node' : node.type;
+      codeLines.push(`  class ${node.id} ${className}`);
+    });
+
+    codeLines.push('');
+
+    // Edges
+    data.edges.forEach(edge => {
+      if (edge.label) {
+        codeLines.push(`  ${edge.from} --"${edge.label}"--> ${edge.to}`);
+      } else {
+        codeLines.push(`  ${edge.from} --> ${edge.to}`);
+      }
+    });
+
+    // Styles
+    const dashedEdges = data.edges.map((e, i) => ({...e, index: i})).filter(e => e.style === 'dashed');
+    if (dashedEdges.length > 0) {
+      codeLines.push('');
+      codeLines.push(`  linkStyle ${dashedEdges.map(e => e.index).join(',')} stroke-dasharray: 5 5`);
+    }
+    
+    if (data.edges.length > 0) {
+      codeLines.push('');
+      codeLines.push(`  linkStyle ${data.edges.length-1} stroke-width:2px,stroke:green,color:green;`);
+    }
+
+    return codeLines.join('\n');
+  }, []);
+
+  const generateFlowchart = useCallback(async () => {
+    setIsGenerating(true);
+    setError(null);
+    try {
+      // Simulate API call or complex logic
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const data = parseUserInput(input);
+      setFlowchartData(data);
+      
+      const code = generateMermaidCode(data);
+      setMermaidCode(code);
+
+      if (onGenerate) {
+        onGenerate(code);
+      }
+    } catch (e: any) {
+      console.error("Error generating flowchart:", e);
+      setError("Failed to generate flowchart. Please check the input and try again.");
+      setFlowchartData(null);
+      setMermaidCode('');
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [input, onGenerate, parseUserInput, generateMermaidCode]);
+
+  useEffect(() => {
+    if (input.trim()) {
+      generateFlowchart();
+    }
+  }, [input, generateFlowchart]);
+
+  // Render Mermaid diagram when mermaidCode changes
+  useEffect(() => {
+    const renderFlowchart = async () => {
+      if (mermaidCode && containerRef.current) {
+        // Clear previous render and error states
+        setError(null);
+        containerRef.current.innerHTML = '';
+
+        const div = document.createElement('div');
+        div.className = 'mermaid';
+        div.textContent = mermaidCode;
+        containerRef.current.appendChild(div);
+
+        try {
+          await mermaid.run({ nodes: [div] });
+        } catch (e: any) {
+          console.error("Mermaid rendering error:", e);
+          const friendlyMessage = "Failed to render flowchart due to a syntax error in the generated diagram.";
+          setError(friendlyMessage);
+          if (containerRef.current) {
+            containerRef.current.innerHTML = ''; // Clear on error
+          }
+        }
+      }
+    };
+    renderFlowchart();
+  }, [mermaidCode]);
 
   const extractWorkflowSteps = (text: string): string[] => {
-    // Simple extraction based on action words and sentence structure
-    const actionWords = ['analyze', 'extract', 'generate', 'create', 'fetch', 'process', 'visit', 'navigate', 'search', 'find'];
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim());
-    
-    return sentences.filter(sentence => 
-      actionWords.some(action => sentence.toLowerCase().includes(action))
-    );
+    const stepRegex = /^\s*(\d+\.|-|\*)\s+(.*)/gm;
+    const steps = [];
+    let match;
+    while ((match = stepRegex.exec(text)) !== null) {
+      steps.push(match[2].trim());
+    }
+    return steps;
   };
 
   const inferAgentsFromText = (text: string): string[] => {
-    const textLower = text.toLowerCase();
-    const inferredAgents: string[] = [];
-
-    // Web-related keywords
-    if (textLower.includes('web') || textLower.includes('website') || textLower.includes('browser') || textLower.includes('navigate') || textLower.includes('visit')) {
-      inferredAgents.push('Browser');
-    }
-
-    // File/GitHub related
-    if (textLower.includes('github') || textLower.includes('repository') || textLower.includes('git')) {
-      inferredAgents.push('GitHub');
-    }
-
-    // Data processing
-    if (textLower.includes('data') || textLower.includes('csv') || textLower.includes('json') || textLower.includes('database')) {
-      inferredAgents.push('Data');
-    }
-
-    // File operations
-    if (textLower.includes('file') || textLower.includes('document') || textLower.includes('read') || textLower.includes('write')) {
-      inferredAgents.push('Filesystem');
-    }
-
-    // API calls
-    if (textLower.includes('api') || textLower.includes('request') || textLower.includes('fetch')) {
-      inferredAgents.push('API');
-    }
-
-    return inferredAgents.length > 0 ? inferredAgents : ['General'];
+    const inferred: string[] = [];
+    if (text.match(/\b(file|read|write|document)\b/i)) inferred.push('FileSystem');
+    if (text.match(/\b(search|find|google|web)\b/i)) inferred.push('WebSearch');
+    return Array.from(new Set(inferred));
   };
 
   const hasConditionalLogic = (text: string): boolean => {
-    const conditionalWords = ['if', 'then', 'else', 'when', 'unless', 'while', 'until'];
-    return conditionalWords.some(word => text.toLowerCase().includes(word));
+    return /\b(if|else|otherwise|then)\b/i.test(text);
   };
 
   const getAgentIcon = (providerType: string): string => {
@@ -266,111 +347,19 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
       'Data': '📊',
       'Filesystem': '📁',
       'API': '🔌',
-      'General': '⚡'
+      'General': '⚡',
+      'WebSearch': '🔍'
     };
-    return icons[providerType] || '🛠️';
+    return icons[providerType] || '🤖';
   };
 
   const generateFlowchartTitle = (text: string): string => {
-    const firstSentence = text.split(/[.!?]/)[0].trim();
-    return firstSentence.length > 50 ? firstSentence.substring(0, 47) + '...' : firstSentence;
-  };
-
-  const generateMermaidCode = (data: FlowchartData): string => {
-    let code = 'flowchart TD\n';
-    
-    // Add nodes with styling
-    data.nodes.forEach(node => {
-      let nodeDefinition = '';
-      
-      switch (node.shape || node.type) {
-        case 'stadium':
-          nodeDefinition = `    ${node.id}([${node.label}])`;
-          break;
-        case 'hexagon':
-          nodeDefinition = `    ${node.id}{{${node.label}}}`;
-          break;
-        case 'diamond':
-          nodeDefinition = `    ${node.id}{${node.label}}`;
-          break;
-        case 'rect':
-        default:
-          nodeDefinition = `    ${node.id}[${node.label}]`;
-          break;
-      }
-      
-      code += nodeDefinition + '\n';
-    });
-
-    code += '\n';
-
-    // Add edges
-    data.edges.forEach(edge => {
-      const connector = edge.style === 'dashed' ? '-..->' : '-->';
-      const label = edge.label ? `|${edge.label}|` : '';
-      code += `    ${edge.from} ${connector}${label} ${edge.to}\n`;
-    });
-
-    code += '\n';
-
-    // Add styling
-    code += `    classDef startEnd fill:#e1f5fe,stroke:#0277bd,stroke-width:2px,color:#000\n`;
-    code += `    classDef alfa fill:#f3e5f5,stroke:#7b1fa2,stroke-width:3px,color:#000\n`;
-    code += `    classDef agent fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px,color:#000\n`;
-    code += `    classDef decision fill:#fff3e0,stroke:#ef6c00,stroke-width:2px,color:#000\n`;
-    
-    code += '\n';
-
-    // Apply classes
-    data.nodes.forEach(node => {
-      switch (node.type) {
-        case 'start':
-        case 'end':
-          code += `    class ${node.id} startEnd\n`;
-          break;
-        case 'alfa':
-          code += `    class ${node.id} alfa\n`;
-          break;
-        case 'agent':
-          code += `    class ${node.id} agent\n`;
-          break;
-        case 'decision':
-          code += `    class ${node.id} decision\n`;
-          break;
-      }
-    });
-
-    return code;
-  };
-
-  const generateFlowchart = async () => {
-    if (!input.trim()) return;
-
-    setIsGenerating(true);
-    setError(null);
-
-    try {
-      const data = parseUserInput(input);
-      const mermaidSyntax = generateMermaidCode(data);
-      
-      setFlowchartData(data);
-      setMermaidCode(mermaidSyntax);
-      
-      if (onGenerate) {
-        onGenerate(mermaidSyntax);
-      }
-
-      toast.success('Flowchart generated successfully!');
-    } catch (err) {
-      const errorMessage = 'Failed to generate flowchart';
-      setError(errorMessage);
-      toast.error(errorMessage);
-    } finally {
-      setIsGenerating(false);
-    }
+    const firstLine = text.split('\n')[0];
+    return `Workflow for: "${firstLine.substring(0, 50)}${firstLine.length > 50 ? '...' : ''}"`;
   };
 
   const copyToClipboard = async () => {
+    if (!mermaidCode) return;
     try {
       await navigator.clipboard.writeText(mermaidCode);
       toast.success('Mermaid code copied to clipboard!');
@@ -380,6 +369,7 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
   };
 
   const downloadMermaid = () => {
+    if (!mermaidCode) return;
     const blob = new Blob([mermaidCode], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -390,6 +380,28 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast.success('Flowchart downloaded!');
+  };
+
+  const downloadSvg = () => {
+    if (containerRef.current?.querySelector('svg')) {
+      const svg = containerRef.current.querySelector('svg');
+      if (svg) {
+        const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'flowchart.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast.success('Flowchart downloaded as SVG!');
+      } else {
+        toast.error("Could not find rendered SVG to download.");
+      }
+    } else {
+      toast.error("Could not find rendered SVG to download.");
+    }
   };
 
   if (!input.trim()) {
@@ -466,11 +478,11 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
             <Download className="w-4 h-4" />
           </button>
           <button
-            onClick={generateFlowchart}
+            onClick={downloadSvg}
             className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Regenerate"
+            title="Download as SVG"
           >
-            <RefreshCw className="w-4 h-4" />
+            <Download className="w-4 h-4" />
           </button>
         </div>
       </div>
@@ -479,7 +491,8 @@ export default function FlowchartGenerator({ input, availableAgents, onGenerate 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white border border-gray-200 rounded-lg p-6 overflow-auto"
+        className="bg-white border border-gray-200 rounded-lg p-6 overflow-auto flex justify-center items-center"
+        style={{ maxHeight: '80vh', maxWidth: '90vw' }}
       >
         <div className="mermaid-container w-full">
           <div ref={containerRef} className="mermaid">
