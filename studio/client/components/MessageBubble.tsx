@@ -240,7 +240,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
   }
 
   return (
-    <div className={`group flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 items-center`}>
+    <div className={`group flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 items-start`}>
       {/* Avatar for agent messages */}
       {isAgent && (
         <div className="mr-3 mt-1 flex-shrink-0">
@@ -308,7 +308,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
       {/* Avatar for user messages */}
       {isUser && (
         <div className="ml-3 mt-1 flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
             <User className="w-5 h-5 text-gray-600" />
           </div>
         </div>
