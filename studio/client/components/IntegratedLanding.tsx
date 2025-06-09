@@ -106,7 +106,7 @@ const IntegratedLanding: React.FC<IntegratedLandingProps> = ({ onCreateNewChat }
               </span>
             </h1>
             <p className="text-xl text-gray-600 mb-8 max-w-lg">
-              The Agentic AI Workspace to orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver results.
+              The Agentic AI Workspace to orchestrate multiple AI agents with seamless tool integration. Build intelligent workflows that adapt, learn, and deliver.
             </p>
             <button
               onClick={onCreateNewChat}
