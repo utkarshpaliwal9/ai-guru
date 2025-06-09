@@ -28,7 +28,10 @@ interface MessageBubbleProps {
 // Helper to wrap @mentions in spans for styling
 const highlightMentions = (text: string | null | undefined) => {
   if (!text) return '';
-  return text.replace(/@(\w+)/g, '<span class="mention">$1</span>');
+  return text
+  .replace(/@\[@(\w+)\]\(\1\)/g, '@$1')           // First: clean up markdown style @[@Word](Word) → @Word
+  .replace(/@(\w+)/g, '<span class="mention">@$1</span>'); // Then: wrap all @Word
+
 };
 
 export default function MessageBubble({ message, onGenerateFlowchart, onExportWorkflow }: MessageBubbleProps) {
