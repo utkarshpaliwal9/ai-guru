@@ -25,7 +25,7 @@ export default function Home() {
   return (
     <>
       <Head>
-        <title>Avalara Studio - Agentic AI Platform</title>
+        <title>Studio</title>
         <meta name="description" content="Multi-agent AI chatbot platform with MCP integration" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
@@ -35,12 +35,17 @@ export default function Home() {
       <div className="h-screen bg-gray-50 flex overflow-hidden">
         {/* Mobile Header */}
         <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
+          <button
+            onClick={() => window.location.reload()}
+            className="flex items-center space-x-3 text-left"
+          >
             <Logo size="md" />
-            <div>
-              <h1 className="text-lg font-bold text-gray-900">Avalara Studio</h1>
-            </div>
-          </div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Studio
+              </span>
+            </h1>
+          </button>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
@@ -53,13 +58,17 @@ export default function Home() {
         <div className={`${isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:relative z-40 w-64 bg-white shadow-lg flex flex-col transition-transform duration-300 ease-in-out md:shadow-lg`}>
           {/* Header - Hidden on mobile (shown in mobile header) */}
           <div className="hidden md:block p-6 border-b border-gray-200">
-            <div className="flex items-center space-x-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="flex items-center space-x-3 text-left w-full"
+            >
               <Logo size="lg" />
-              <div>
-                <h1 className="text-lg font-bold text-gray-900">Avalara Studio</h1>
-                <p className="text-sm text-gray-500">Agentic Platform</p>
-              </div>
-            </div>
+              <h1 className="text-3xl font-bold text-gray-900">
+                <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                  Studio
+                </span>
+              </h1>
+            </button>
           </div>
 
           {/* Navigation */}
