@@ -273,19 +273,6 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
               <Save className="w-4 h-4" />
             </button>
           )}
-          {/* Message header */}
-          <div className={`px-3 sm:px-4 pt-2 pb-1 border-b ${
-            isUser 
-              ? 'border-blue-400 border-opacity-30' 
-              : 'border-gray-100'
-          }`}>
-            <div className={`text-xs font-medium ${
-              isUser ? 'text-blue-100' : 'text-gray-600'
-            }`}>
-              {isUser ? 'You' : message.sender || 'AI Assistant'}
-            </div>
-          </div>
-          
           {/* Message content with Markdown rendering */}
           <div className={`px-3 sm:px-4 py-2 ${
             isUser ? 'text-white' : 'text-gray-900'
