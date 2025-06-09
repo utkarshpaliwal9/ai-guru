@@ -53,7 +53,7 @@ const DataFlowAnimation = () => {
   };
 
   return (
-    <div className={`relative w-[370px] h-[370px] mx-auto flex items-center justify-center`}>
+    <div className={`relative w-[380px] h-[380px] mx-auto flex items-center justify-center`}>
       {/* Central Logo with futuristic effects */}
       <motion.div
         className="relative z-10"
