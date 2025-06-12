@@ -29,9 +29,17 @@ interface MessageBubbleProps {
 const highlightMentions = (text: string | null | undefined) => {
   if (!text) return '';
   return text
-  .replace(/@\[@(\w+)\]\(\1\)/g, '@$1')           // First: clean up markdown style @[@Word](Word) → @Word
-  .replace(/@(\w+)/g, '<span class="mention">@$1</span>'); // Then: wrap all @Word
-
+  .replace(/@\[@([^\]]+)\]\(([^)]+)\)/g, (match, name, id) => {
+    if (name === id) {
+      // It's a markdown-style mention, e.g., @[@name with spaces](name with spaces)
+      // Replace it directly with a styled span.
+      return `<span class="mention">@${name} + ${id}</span>`;
+    }
+    // If name and id don't match, or for other patterns, don't change it.
+    // This might be some other markdown structure that we don't want to touch.
+    return match;
+  })
+  .replace(/@(\w+)/g, '<span class="mention">@$1</span>'); // Then: wrap simple @Word mentions
 };
 
 export default function MessageBubble({ message, onGenerateFlowchart, onExportWorkflow }: MessageBubbleProps) {
