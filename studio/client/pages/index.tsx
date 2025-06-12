@@ -160,7 +160,7 @@ export default function Home() {
           )}
 
           {activeTab === 'agents' && (
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 overflow-y-auto">
               <AgentManagement />
             </div>
           )}
