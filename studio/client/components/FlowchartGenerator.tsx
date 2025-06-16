@@ -274,7 +274,7 @@ const parseUserInput = (text: string, availableAgents: Agent[]) => {
     // Orchestrator Node
     nodes.push({
       id: 'ALFA',
-      data: { label: '🧠 Alfa' },
+      data: { label: '🧠 LLM' },
       position: { x: 0, y: 0 },
       sourcePosition: Position.Bottom,
       targetPosition: Position.Top,
