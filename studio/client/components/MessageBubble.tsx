@@ -33,7 +33,7 @@ const highlightMentions = (text: string | null | undefined) => {
     if (name === id) {
       // It's a markdown-style mention, e.g., @[@name with spaces](name with spaces)
       // Replace it directly with a styled span.
-      return `<span class="mention">@${name} + ${id}</span>`;
+      return `<span class="mention">@${name}</span>`;
     }
     // If name and id don't match, or for other patterns, don't change it.
     // This might be some other markdown structure that we don't want to touch.
