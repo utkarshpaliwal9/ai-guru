@@ -126,7 +126,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted }) => {
             
             <p className="text-xl sm:text-2xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
               Orchestrate multiple AI agents with seamless tool integration. 
-              Build intelligent workflows that adapt, learn, and deliver results.
+              Build intelligent workflows that adapt, learn, and deliver.
             </p>
             
             <motion.div

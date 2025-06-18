@@ -37,7 +37,7 @@ router.get('/:id', async (req, res) => {
 // Create a new workflow
 router.post('/', async (req, res) => {
   try {
-    const { name, description, prompt } = req.body;
+    const { name, description, prompt, inputFields } = req.body;
     if (!name || !prompt) {
       return res.status(400).json({ error: 'Name and prompt are required' });
     }
@@ -46,6 +46,7 @@ router.post('/', async (req, res) => {
       name,
       description: description || '',
       prompt,
+      inputFields: Array.isArray(inputFields) ? inputFields : [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

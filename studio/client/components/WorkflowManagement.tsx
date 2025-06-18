@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Edit3, Trash2, GitBranch, X } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Plus, Edit3, Trash2, GitBranch, X, Play, Pause, StopCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import FlowchartGenerator from './FlowchartGenerator';
 
@@ -9,6 +9,7 @@ type Workflow = {
   name: string;
   description: string;
   prompt: string;
+  inputFields?: { name: string; description: string }[];
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +30,8 @@ export default function WorkflowManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Workflow | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '', prompt: '' });
+  const [workflowStatus, setWorkflowStatus] = useState<Record<string, 'idle' | 'running' | 'paused' | 'stopped' | 'completed'>>({});
+  const timersRef = useRef<Record<string, number>>({});
   const [showFlowchart, setShowFlowchart] = useState(false);
   const [flowchartPrompt, setFlowchartPrompt] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -44,6 +47,10 @@ export default function WorkflowManagement() {
       if (res.ok) {
         const data = await res.json();
         setWorkflows(data);
+        // initialize workflow statuses
+        const initialStatus: Record<string, 'idle' | 'running' | 'paused' | 'stopped' | 'completed'> = {};
+        data.forEach((wf: Workflow) => { initialStatus[wf.id] = 'idle'; });
+        setWorkflowStatus(initialStatus);
       } else {
         throw new Error('Failed to load workflows');
       }
@@ -134,6 +141,32 @@ export default function WorkflowManagement() {
 
   const closeFlow = () => setShowFlowchart(false);
 
+  // Workflow control functions
+  const startWorkflow = (id: string) => {
+    if (timersRef.current[id]) clearTimeout(timersRef.current[id]);
+    setWorkflowStatus(prev => ({ ...prev, [id]: 'running' }));
+    timersRef.current[id] = window.setTimeout(() => {
+      setWorkflowStatus(prev => ({ ...prev, [id]: 'completed' }));
+      delete timersRef.current[id];
+    }, 30000);
+  };
+
+  const pauseWorkflow = (id: string) => {
+    if (timersRef.current[id]) {
+      clearTimeout(timersRef.current[id]);
+      delete timersRef.current[id];
+    }
+    setWorkflowStatus(prev => ({ ...prev, [id]: 'paused' }));
+  };
+
+  const stopWorkflow = (id: string) => {
+    if (timersRef.current[id]) {
+      clearTimeout(timersRef.current[id]);
+      delete timersRef.current[id];
+    }
+    setWorkflowStatus(prev => ({ ...prev, [id]: 'stopped' }));
+  };
+
   if (isLoading) {
     return <div className="p-8 text-center">Loading workflows...</div>;
   }
@@ -152,11 +185,43 @@ export default function WorkflowManagement() {
         <div className="space-y-4">
           {workflows.map(wf => (
             <div key={wf.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center">
-              <div>
+              <div className="flex flex-col">
                 <h2 className="text-lg font-semibold text-gray-900">{wf.name}</h2>
                 <p className="text-sm text-gray-600 truncate">{wf.description}</p>
+                {wf.inputFields && wf.inputFields.length > 0 && (
+                  <p className="text-xs text-gray-500 truncate">
+                    Inputs: {wf.inputFields.map(f => f.name).join(', ')}
+                  </p>
+                )}
               </div>
-              <div className="flex space-x-2">
+              <div className="flex items-center space-x-2">
+                {['idle', 'stopped', 'completed'].includes(workflowStatus[wf.id]) && (
+                  <button
+                    onClick={() => startWorkflow(wf.id)}
+                    title="Start Workflow"
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <Play className="w-5 h-5 text-green-500" />
+                  </button>
+                )}
+                {workflowStatus[wf.id] === 'running' && (
+                  <button
+                    onClick={() => pauseWorkflow(wf.id)}
+                    title="Pause Workflow"
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <Pause className="w-5 h-5 text-yellow-500" />
+                  </button>
+                )}
+                {workflowStatus[wf.id] === 'paused' && (
+                  <button
+                    onClick={() => stopWorkflow(wf.id)}
+                    title="Stop Workflow"
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <StopCircle className="w-5 h-5 text-red-500" />
+                  </button>
+                )}
                 <button onClick={() => openFlow(wf.prompt)} title="Generate flowchart" className="p-1 hover:bg-gray-100 rounded">
                   <GitBranch className="w-5 h-5" />
                 </button>

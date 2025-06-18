@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Bot, User, Loader2, ChevronDown, Plus, MessageCircle, Trash2, X } from 'lucide-react';
+import { Send, Bot, User, Loader2, ChevronDown, Plus, MessageCircle, Trash2, X, GitBranch } from 'lucide-react';
 import { Socket } from 'socket.io-client';
 import { toast } from 'react-hot-toast';
 import MessageBubble from './MessageBubble';
@@ -34,6 +34,16 @@ interface Agent {
   isActive: boolean;
   providerType: string;
   mcpConfig?: any;
+}
+
+interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  prompt: string;
+  inputFields?: { name: string; description: string }[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface Conversation {
@@ -71,6 +81,8 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   const inputRef = useRef<any>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [mentionData, setMentionData] = useState<any[]>([]);
+  const [workflows, setWorkflows] = useState<Workflow[]>([]);
+  const [inputFields, setInputFields] = useState<{ name: string; description: string }[]>([]);
 
   // Scroll to bottom when new messages arrive
   useEffect(() => {
@@ -93,6 +105,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   useEffect(() => {
     loadAvailableAgents();
     loadConversations();
+    loadWorkflows();
   }, []);
 
   // Load conversation history when conversationId changes
@@ -202,14 +215,22 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   }, [socket, conversationId]);
 
   useEffect(() => {
-    if (availableAgents.length > 0) {
-      setMentionData(availableAgents.map(agent => ({
-        ...agent,
-        id: agent.name,
-        display: `@${agent.name}`,
-      })));
-    }
-  }, [availableAgents]);
+    // Combine agent and workflow suggestions
+    const agentSuggestions = availableAgents.map(agent => ({
+      id: agent.name,
+      display: `@${agent.name}`,
+      description: agent.description,
+      entityType: 'agent',
+      providerType: agent.providerType,
+    }));
+    const workflowSuggestions = workflows.map(wf => ({
+      id: wf.name,
+      display: `@${wf.name}`,
+      description: wf.description,
+      entityType: 'workflow',
+    }));
+    setMentionData([...agentSuggestions, ...workflowSuggestions]);
+  }, [availableAgents, workflows]);
 
   const loadAvailableAgents = async () => {
     try {
@@ -235,6 +256,18 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       toast.error('Failed to load conversations');
     } finally {
       setIsLoadingConversations(false);
+    }
+  };
+
+  const loadWorkflows = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/workflows`);
+      if (response.ok) {
+        const data: Workflow[] = await response.json();
+        setWorkflows(data);
+      }
+    } catch (error) {
+      console.error('Error loading workflows:', error);
     }
   };
 
@@ -365,6 +398,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
     setWorkflowPrompt(prompt);
     setWorkflowName('');
     setWorkflowDescription('');
+    setInputFields([]);
     setShowWorkflowModal(true);
   };
 
@@ -383,7 +417,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/workflows`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: workflowName, description: workflowDescription, prompt: workflowPrompt })
+        body: JSON.stringify({ name: workflowName, description: workflowDescription, prompt: workflowPrompt, inputFields })
       });
       if (response.ok) {
         toast.success('Workflow created');
@@ -408,40 +442,48 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
   };
 
   const renderSuggestion = (suggestion: any, search: string, highlightedDisplay: React.ReactNode, index: number, focused: boolean) => {
-    const agent = suggestion;
+    const isAgent = suggestion.entityType === 'agent';
     return (
       <div className={`w-full px-3 py-2 text-left flex items-center space-x-3 transition-colors ${
           focused
             ? 'bg-blue-50 border-l-2 border-blue-500'
             : 'hover:bg-gray-50'
         }`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-          agent.providerType === 'mcp'
-            ? 'bg-blue-100'
-            : 'bg-green-100'
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+          isAgent
+            ? (suggestion.providerType === 'mcp' ? 'bg-blue-100' : 'bg-green-100')
+            : 'bg-yellow-100'
         }`}>
-          <Bot className={`w-4 h-4 ${
-            agent.providerType === 'mcp'
-              ? 'text-blue-600'
-              : 'text-green-600'
-          }`} />
+          {isAgent ? (
+            <Bot className={`w-4 h-4 ${
+              suggestion.providerType === 'mcp' ? 'text-blue-600' : 'text-green-600'
+            }`} />
+          ) : (
+            <GitBranch className="w-4 h-4 text-yellow-600" />
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium text-gray-900">
             {highlightedDisplay}
           </div>
           <div className="text-xs text-gray-500 truncate">
-            {agent.description}
+            {suggestion.description}
           </div>
         </div>
         <div className="flex-shrink-0">
-          <span className={`text-xs px-2 py-1 rounded-full ${
-            agent.providerType === 'mcp'
-              ? 'bg-blue-100 text-blue-800'
-              : 'bg-green-100 text-green-800'
-          }`}>
-            {agent.providerType === 'mcp' ? 'MCP' : 'API'}
-          </span>
+          {isAgent ? (
+            <span className={`text-xs px-2 py-1 rounded-full ${
+              suggestion.providerType === 'mcp'
+                ? 'bg-blue-100 text-blue-800'
+                : 'bg-green-100 text-green-800'
+            }`}>
+              {suggestion.providerType === 'mcp' ? 'MCP' : 'API'}
+            </span>
+          ) : (
+            <span className="text-xs px-2 py-1 rounded-full bg-yellow-100 text-yellow-800">
+              WORKFLOW
+            </span>
+          )}
         </div>
       </div>
     );
@@ -605,7 +647,7 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                   value={inputMessage}
                   onChange={handleInputChange}
                   onKeyDown={handleKeyPress}
-                  placeholder="Ask Alfa anything... Use @agentName to call specialized tools"
+                  placeholder="Ask Alfa anything... Use @agentName for tools or @workflowName to trigger workflows"
                   className="mentions"
                   style={styles}
                   disabled={isLoading}
@@ -692,6 +734,47 @@ export default function ChatInterface({ conversationId, onConversationSelect, so
                       className="input-field mt-1 w-full bg-gray-100"
                       rows={3}
                     />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium">Input Parameters</label>
+                    {inputFields.map((field, idx) => (
+                      <div key={idx} className="flex space-x-2 items-center mb-2">
+                        <input
+                          type="text"
+                          value={field.name}
+                          onChange={e => {
+                            const newFields = [...inputFields];
+                            newFields[idx].name = e.target.value;
+                            setInputFields(newFields);
+                          }}
+                          className="input-field mt-1 flex-1"
+                          placeholder="Parameter name"
+                        />
+                        <input
+                          type="text"
+                          value={field.description}
+                          onChange={e => {
+                            const newFields = [...inputFields];
+                            newFields[idx].description = e.target.value;
+                            setInputFields(newFields);
+                          }}
+                          className="input-field mt-1 flex-1"
+                          placeholder="Description"
+                        />
+                        <button
+                          onClick={() => setInputFields(inputFields.filter((_, i) => i !== idx))}
+                          className="p-1 text-red-500 hover:text-red-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setInputFields([...inputFields, { name: '', description: '' }])}
+                      className="btn-secondary text-sm"
+                    >
+                      Add Input
+                    </button>
                   </div>
                   <div className="flex justify-end space-x-2 pt-4">
                     <button onClick={closeExportWorkflowDialog} className="btn-secondary">Cancel</button>

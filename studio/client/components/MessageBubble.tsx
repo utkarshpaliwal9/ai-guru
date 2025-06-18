@@ -28,7 +28,18 @@ interface MessageBubbleProps {
 // Helper to wrap @mentions in spans for styling
 const highlightMentions = (text: string | null | undefined) => {
   if (!text) return '';
-  return text.replace(/@(\w+)/g, '<span class="mention">@$1</span>');
+  return text
+  .replace(/@\[@([^\]]+)\]\(([^)]+)\)/g, (match, name, id) => {
+    if (name === id) {
+      // It's a markdown-style mention, e.g., @[@name with spaces](name with spaces)
+      // Replace it directly with a styled span.
+      return `<span class="mention">@${name}</span>`;
+    }
+    // If name and id don't match, or for other patterns, don't change it.
+    // This might be some other markdown structure that we don't want to touch.
+    return match;
+  })
+  .replace(/@(\w+)/g, '<span class="mention">@$1</span>'); // Then: wrap simple @Word mentions
 };
 
 export default function MessageBubble({ message, onGenerateFlowchart, onExportWorkflow }: MessageBubbleProps) {
@@ -237,7 +248,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
   }
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
+    <div className={`group flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 items-start`}>
       {/* Avatar for agent messages */}
       {isAgent && (
         <div className="mr-3 mt-1 flex-shrink-0">
@@ -247,45 +258,36 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
         </div>
       )}
       
+      {/* Floating Action Menu for user messages */}
+      {isUser && (onGenerateFlowchart || onExportWorkflow) && (
+        <div className="flex flex-col space-y-1 mr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {onGenerateFlowchart && (
+            <button
+              onClick={e => { e.stopPropagation(); onGenerateFlowchart(message.content || ''); }}
+              className="p-1.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-full"
+              title="Generate flowchart"
+            >
+              <GitBranch className="w-3 h-3" />
+            </button>
+          )}
+          {onExportWorkflow && (
+            <button
+              onClick={e => { e.stopPropagation(); onExportWorkflow(message.content || ''); }}
+              className="p-1.5 bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-full"
+              title="Create Workflow"
+            >
+              <Save className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className={`max-w-xs sm:max-w-sm lg:max-w-lg xl:max-w-xl rounded-lg overflow-hidden ${
         isUser 
           ? 'bg-blue-500 text-white' 
           : 'bg-white border border-gray-200 shadow-sm'
       }`}>
         <div className="relative">
-          {/* Flowchart trigger button for user messages */}
-          {isUser && onGenerateFlowchart && (
-            <button
-              onClick={e => { e.stopPropagation(); onGenerateFlowchart(message.content || ''); }}
-              className="absolute top-2 right-2 p-1 bg-purple-600 hover:bg-purple-500 text-white rounded-full"
-              title="Generate flowchart"
-            >
-              <GitBranch className="w-4 h-4" />
-            </button>
-          )}
-          {/* Export workflow button for user messages */}
-          {isUser && onExportWorkflow && (
-            <button
-              onClick={e => { e.stopPropagation(); onExportWorkflow(message.content || ''); }}
-              className="absolute top-2 right-8 p-1 bg-green-600 hover:bg-green-500 text-white rounded-full"
-              title="Create Workflow"
-            >
-              <Save className="w-4 h-4" />
-            </button>
-          )}
-          {/* Message header */}
-          <div className={`px-3 sm:px-4 pt-2 pb-1 border-b ${
-            isUser 
-              ? 'border-blue-400 border-opacity-30' 
-              : 'border-gray-100'
-          }`}>
-            <div className={`text-xs font-medium ${
-              isUser ? 'text-blue-100' : 'text-gray-600'
-            }`}>
-              {isUser ? 'You' : message.sender || 'AI Assistant'}
-            </div>
-          </div>
-          
           {/* Message content with Markdown rendering */}
           <div className={`px-3 sm:px-4 py-2 ${
             isUser ? 'text-white' : 'text-gray-900'
@@ -314,7 +316,7 @@ export default function MessageBubble({ message, onGenerateFlowchart, onExportWo
       {/* Avatar for user messages */}
       {isUser && (
         <div className="ml-3 mt-1 flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
             <User className="w-5 h-5 text-gray-600" />
           </div>
         </div>

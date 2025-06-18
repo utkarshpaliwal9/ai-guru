@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Plus, Bot, Edit3, Trash2, Settings, Save, X, Upload, FileText } from 'lucide-react';
+import { Plus, Bot, Edit3, Trash2, Settings, Save, X, Upload, FileText, Power, PowerOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import DataFlowAnimation from './DataFlowAnimation';
 
 interface Agent {
   id: string;
@@ -11,7 +12,7 @@ interface Agent {
   apiKey: string;
   configuration: Record<string, any>;
   mcpServerId?: string;
-  mcpConfig?: any; // Add MCP config field
+  mcpConfig?: any;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -28,7 +29,6 @@ export default function AgentManagement() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -81,17 +81,15 @@ export default function AgentManagement() {
       name: agent.name,
       description: agent.description,
       apiEndpoint: agent.apiEndpoint,
-      apiKey: '', // Don't show existing API key for security
+      apiKey: '', // Don't show existing API key
     });
     
-    // Convert configuration object to key-value pairs
     const pairs = Object.entries(agent.configuration || {}).map(([key, value]) => ({
       key,
       value: String(value)
     }));
     setConfigPairs(pairs.length > 0 ? pairs : [{ key: '', value: '' }]);
     
-    // Set MCP config if available
     if (agent.mcpConfig) {
       setMcpConfig(agent.mcpConfig);
     }
@@ -123,7 +121,6 @@ export default function AgentManagement() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.name.endsWith('.json')) {
       toast.error('Please upload a JSON configuration file');
       return;
@@ -133,7 +130,6 @@ export default function AgentManagement() {
       const text = await file.text();
       const config = JSON.parse(text);
       
-      // Basic validation for MCP config
       if (!config.mcpServers && !config.server && !config.name) {
         toast.error('Invalid MCP configuration file format');
         return;
@@ -142,7 +138,6 @@ export default function AgentManagement() {
       setMcpConfigFile(file);
       setMcpConfig(config);
       
-      // Auto-populate fields if available
       if (config.name && !formData.name) {
         setFormData(prev => ({ ...prev, name: config.name }));
       }
@@ -163,13 +158,11 @@ export default function AgentManagement() {
       return;
     }
 
-    // For MCP agents, we don't require API endpoint if MCP config is provided
     if (!mcpConfig && !formData.apiEndpoint) {
       toast.error('Either API endpoint or MCP configuration is required');
       return;
     }
 
-    // Convert config pairs to object
     const configuration = configPairs.reduce((acc, pair) => {
       if (pair.key && pair.value) {
         acc[pair.key] = pair.value;
@@ -298,169 +291,196 @@ export default function AgentManagement() {
   }
 
   return (
-    <div className="p-8 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Agent Tools Management</h1>
-          <p className="text-gray-600 mt-2">Create and manage specialized tools that Alfa can call during conversations</p>
-        </div>
-        <button
-          onClick={openCreateForm}
-          className="btn-primary"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Create Agent
-        </button>
-      </div>
-
-      {/* Agents Grid */}
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {agents.map((agent) => (
-          <motion.div
-            key={agent.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="card"
-          >
-            <div className="card-header">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className={`agent-avatar ${agent.isActive ? '' : 'opacity-50'}`}>
-                    <Bot className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">{agent.name}</h3>
-                    <p className="text-sm text-gray-500 truncate">{agent.description}</p>
-                  </div>
+    <div className="p-4 sm:p-6 lg:p-8">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-4">
+                <div className="p-3 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl shadow-lg">
+                    <Bot className="w-8 h-8 text-white" />
                 </div>
-                <div className="flex items-center space-x-1">
-                  <button
-                    onClick={() => testAgent(agent.id)}
-                    className="p-1 hover:bg-blue-100 rounded"
-                    title="Test connection"
-                  >
-                    <Settings className="w-4 h-4 text-blue-500" />
-                  </button>
-                  <button
-                    onClick={() => openEditForm(agent)}
-                    className="p-1 hover:bg-gray-100 rounded"
-                  >
-                    <Edit3 className="w-4 h-4 text-gray-500" />
-                  </button>
-                  <button
-                    onClick={() => deleteAgent(agent.id)}
-                    className="p-1 hover:bg-red-100 rounded"
-                  >
-                    <Trash2 className="w-4 h-4 text-red-500" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="card-body">
-              <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-gray-500">
-                    {agent.mcpConfig ? 'MCP Configuration' : 'API Endpoint'}
-                  </label>
-                  <p className="text-sm text-gray-900 truncate">
-                    {agent.mcpConfig ? 'MCP Agent' : agent.apiEndpoint}
-                  </p>
-                  {agent.mcpConfig && (
-                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-100 text-blue-800 mt-1">
-                      <FileText className="w-3 h-3 mr-1" />
-                      Model Context Protocol
-                    </span>
-                  )}
+                    <h1 className="text-3xl font-bold text-gray-900">Agent Tools Management</h1>
+                    <p className="text-gray-600 mt-1">
+                        Create, manage, and deploy your autonomous AI agents.
+                    </p>
                 </div>
+            </div>
+            <button
+              onClick={openCreateForm}
+              className="btn-primary"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Create Agent
+            </button>
+        </div>
 
-                {Object.keys(agent.configuration || {}).length > 0 && (
-                  <div>
-                    <label className="text-xs font-medium text-gray-500">Configuration</label>
-                    <div className="mt-1 space-y-1">
-                      {Object.entries(agent.configuration).slice(0, 3).map(([key, value]) => (
-                        <div key={key} className="flex justify-between text-xs">
-                          <span className="text-gray-600">{key}:</span>
-                          <span className="text-gray-900 truncate max-w-20">{String(value)}</span>
-                        </div>
-                      ))}
-                    </div>
+        {/* Agents Grid */}
+        {agents.length > 0 && (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {agents.map((agent, index) => (
+              <motion.div
+                key={agent.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: index * 0.05 }}
+                className="relative group bg-white border border-gray-200 rounded-xl overflow-hidden hover:shadow-2xl hover:shadow-purple-200/50 transition-all duration-300"
+              >
+                {agent.isActive && (
+                  <div className="absolute top-0 right-0 h-3 w-3 m-4">
+                    {/* <span className="absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75 animate-ping"></span> */}
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-green-500"></span>
                   </div>
                 )}
 
-                <div className="flex items-center justify-between pt-2">
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    agent.isActive 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-800'
-                  }`}>
-                    {agent.isActive ? 'Active' : 'Inactive'}
-                  </span>
-                  
+                <div className="p-6">
+                  <div className="flex items-start space-x-4">
+                    <div className={`flex-shrink-0 w-12 h-12 rounded-lg flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-900 ${!agent.isActive && 'opacity-50'}`}>
+                        <Bot className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <h3 className="text-lg font-semibold text-gray-900 truncate">{agent.name}</h3>
+                        <p className="text-sm text-gray-500 truncate">{agent.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                      <div>
+                        <label className="text-xs font-medium text-gray-500">
+                          {agent.mcpConfig ? 'Integration' : 'API Endpoint'}
+                        </label>
+                        <div className="flex items-center space-x-2 mt-1">
+                            {agent.mcpConfig && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  <FileText className="w-3 h-3 mr-1" />
+                                  MCP
+                              </span>
+                            )}
+                            <p className="text-sm text-gray-900 truncate">
+                              {agent.mcpConfig ? agent.mcpConfig.name || '' : agent.apiEndpoint}
+                            </p>
+                        </div>
+                      </div>
+                      
+                      {Object.keys(agent.configuration || {}).length > 0 && (
+                        <div>
+                            <label className="text-xs font-medium text-gray-500">Configuration</label>
+                            <p className="text-sm text-gray-600 mt-1">
+                                {Object.keys(agent.configuration).length} custom parameter(s)
+                            </p>
+                        </div>
+                      )}
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50/70 px-6 py-3 flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                        <span className={`text-xs px-2 py-1 rounded-full flex items-center ${
+                            agent.isActive 
+                              ? 'bg-green-100 text-green-800' 
+                              : 'bg-gray-200 text-gray-800'
+                        }`}>
+                            <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${agent.isActive ? 'bg-green-500' : 'bg-gray-500'}`}></div>
+                            {agent.isActive ? 'Active' : 'Inactive'}
+                        </span>
+                    </div>
+
+                    <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => toggleAgent(agent.id)}
+                          className={`p-1.5 rounded-full transition-colors ${
+                          agent.isActive
+                              ? 'text-gray-500 hover:bg-red-100 hover:text-red-600'
+                              : 'text-gray-500 hover:bg-green-100 hover:text-green-600'
+                          }`}
+                          title={agent.isActive ? 'Deactivate' : 'Activate'}
+                        >
+                          {agent.isActive ? <PowerOff className="w-4 h-4" /> : <Power className="w-4 h-4" />}
+                        </button>
+                        <button
+                            onClick={() => testAgent(agent.id)}
+                            className="p-1.5 hover:bg-blue-100 rounded-full text-gray-500 hover:text-blue-600"
+                            title="Test connection"
+                        >
+                            <Settings className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => openEditForm(agent)}
+                            className="p-1.5 hover:bg-gray-200 rounded-full text-gray-500 hover:text-gray-700"
+                            title="Edit"
+                        >
+                            <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => deleteAgent(agent.id)}
+                            className="p-1.5 hover:bg-red-100 rounded-full text-gray-500 hover:text-red-600"
+                            title="Delete"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                        </button>
+                    </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        )}
+
+        {/* Empty State */}
+        {agents.length === 0 && !isLoading && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+            className="text-center py-16 px-6"
+          >
+            <div className="flex justify-center">
+              <DataFlowAnimation />
+            </div>
+            <h3 className="text-2xl font-semibold text-gray-900 mt-8 mb-2">
+              Your Agent Ecosystem Awaits
+            </h3>
+            <p className="text-gray-600 mb-8 max-w-lg mx-auto">
+              Create your first intelligent agent. Agents are specialized AI tools that can be orchestrated to perform complex tasks, connect to data, and interact with services.
+            </p>
+            <button
+              onClick={openCreateForm}
+              className="btn-primary text-lg px-8 py-3"
+            >
+              <Plus className="w-5 h-5 mr-2" />
+              Create Your First Agent
+            </button>
+          </motion.div>
+        )}
+
+        {/* Create/Edit Modal */}
+        {showCreateForm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+            >
+              <div className="p-6 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-4">
+                    <div className="p-2 bg-gray-100 rounded-lg">
+                      <Bot className="w-6 h-6 text-gray-700" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900">
+                      {editingAgent ? 'Edit Agent' : 'Configure Agent'}
+                    </h2>
+                  </div>
                   <button
-                    onClick={() => toggleAgent(agent.id)}
-                    className={`text-xs px-3 py-1 rounded-md transition-colors ${
-                      agent.isActive
-                        ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                        : 'bg-green-100 text-green-700 hover:bg-green-200'
-                    }`}
+                    onClick={closeForm}
+                    className="p-2 hover:bg-gray-100 rounded-full"
                   >
-                    {agent.isActive ? 'Deactivate' : 'Activate'}
+                    <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
 
-      {/* Empty State */}
-      {agents.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.9 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="text-center py-16"
-        >
-          <Bot className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">No Agent Tools Created</h3>
-          <p className="text-gray-600 mb-8 max-w-md mx-auto">
-            Create your first agent tool for Alfa to use. Tools are specialized services
-            that Alfa can call when mentioned with @ in conversations.
-          </p>
-          <button
-            onClick={openCreateForm}
-            className="btn-primary"
-          >
-            <Plus className="w-4 h-4 mr-2" />
-            Create Your First Tool
-          </button>
-        </motion.div>
-      )}
-
-      {/* Create/Edit Modal */}
-      {showCreateForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
-          >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {editingAgent ? 'Edit Agent' : 'Create New Agent'}
-                </h2>
-                <button
-                  onClick={closeForm}
-                  className="p-2 hover:bg-gray-100 rounded-lg"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              <div className="space-y-6">
-                {/* Basic Information */}
+              <div className="p-6 space-y-6 overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -489,7 +509,7 @@ export default function AgentManagement() {
                     />
                     {mcpConfig && (
                       <p className="text-xs text-gray-500 mt-1">
-                        API endpoint is not required when MCP configuration is provided
+                        API endpoint is not required for MCP agents.
                       </p>
                     )}
                   </div>
@@ -521,7 +541,6 @@ export default function AgentManagement() {
                   />
                 </div>
 
-                {/* Configuration Key-Value Pairs */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Configuration
@@ -553,7 +572,6 @@ export default function AgentManagement() {
                         )}
                       </div>
                     ))}
-                    
                     <button
                       onClick={addConfigPair}
                       className="text-sm text-blue-600 hover:text-blue-700"
@@ -563,30 +581,28 @@ export default function AgentManagement() {
                   </div>
                 </div>
 
-                {/* MCP Configuration */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     MCP Configuration (Optional)
                   </label>
                   <p className="text-sm text-gray-500 mb-3">
-                    Upload an MCP config file to enable Model Context Protocol integration
+                    Upload an MCP config file to enable Model Context Protocol.
                   </p>
                   <div className="space-y-3">
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 hover:border-gray-400 transition-colors">
-                      <div className="flex items-center justify-center">
-                        <label className="cursor-pointer flex flex-col items-center">
-                          <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                          <span className="text-sm text-gray-600">
-                            {mcpConfigFile ? mcpConfigFile.name : 'Click to upload MCP config (JSON)'}
-                          </span>
-                          <input
-                            type="file"
-                            accept=".json"
-                            onChange={handleMcpFileUpload}
-                            className="hidden"
-                          />
-                        </label>
+                    <div className="relative border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-500 transition-all duration-300 bg-gray-50/50 hover:bg-white">
+                      <div className="flex flex-col items-center justify-center space-y-2 text-gray-500">
+                        <Upload className="w-8 h-8" />
+                        <p className="text-sm font-semibold">
+                          {mcpConfigFile ? mcpConfigFile.name : 'Click or drag to upload MCP config'}
+                        </p>
+                         <p className="text-xs">JSON file up to 5MB</p>
                       </div>
+                      <input
+                        type="file"
+                        accept=".json"
+                        onChange={handleMcpFileUpload}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      />
                     </div>
                     
                     {mcpConfig && (
@@ -616,27 +632,20 @@ export default function AgentManagement() {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex items-center justify-end space-x-3 pt-6 border-t">
-                  <button
-                    onClick={closeForm}
-                    className="btn-secondary"
-                  >
+                  <button onClick={closeForm} className="btn-secondary">
                     Cancel
                   </button>
-                  <button
-                    onClick={saveAgent}
-                    className="btn-primary"
-                  >
+                  <button onClick={saveAgent} className="btn-primary">
                     <Save className="w-4 h-4 mr-2" />
                     {editingAgent ? 'Update Agent' : 'Create Agent'}
                   </button>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
+            </motion.div>
+          </div>
+        )}
+      </div>
     </div>
   );
 } 
