@@ -5,6 +5,7 @@ import {
   getAllMCPServers, 
   deleteMCPServer 
 } from '../utils/storage.js';
+import { mcpService } from '../services/mcpService.js';
 
 const router = express.Router();
 
@@ -184,6 +185,33 @@ router.patch('/:id/toggle', async (req, res) => {
   } catch (error) {
     console.error('Error toggling MCP server status:', error);
     res.status(500).json({ error: 'Failed to toggle server status' });
+  }
+});
+
+// Execute an MCP tool
+router.post('/execute-tool', async (req, res) => {
+  try {
+    const { agentId, toolName, toolArgs } = req.body;
+
+    if (!agentId || !toolName) {
+      return res.status(400).json({ error: 'agentId and toolName are required' });
+    }
+
+    console.log(`🔌 Executing MCP tool '${toolName}' for agent '${agentId}' with args:`, toolArgs);
+    const result = await mcpService.callMCPTool(agentId, toolName, toolArgs);
+    console.log(`✅ Tool execution result for '${toolName}':`, result);
+
+    res.json({
+      success: true,
+      result: result
+    });
+  } catch (error) {
+    console.error(`❌ Error executing MCP tool:`, error.message);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: error.stack
+    });
   }
 });
 

@@ -2,6 +2,7 @@ import { providerFactory } from './providers/ProviderFactory.js';
 import { getAllAgents, getAgent } from '../utils/storage.js';
 import { callAgentAPI } from './agentService.js';
 import { orchestratorService } from './orchestratorService.js';
+import { agentServerManager } from './agentServerManager.js';
 
 class BaseLLMService {
   constructor() {
@@ -78,9 +79,57 @@ class BaseLLMService {
     }
 
     try {
+      // 1) Launch agent servers for any mentioned agents BEFORE processing
+      console.log('🔍 Checking for agent mentions to launch servers...');
+      const serverLaunchResult = await agentServerManager.launchAgentsFromText(userMessage);
+      
+      if (serverLaunchResult.launchedAgents.length > 0) {
+        console.log(`🚀 Launched ${serverLaunchResult.launchedAgents.length} agent servers:`, 
+          serverLaunchResult.launchedAgents.map(a => a.agentName));
+        
+        // Emit server launch event if socket available
+        if (io && conversationId) {
+          io.to(conversationId).emit('agent-servers-launched', {
+            launched: serverLaunchResult.launchedAgents,
+            alreadyRunning: serverLaunchResult.alreadyRunning,
+            failed: serverLaunchResult.failed
+          });
+        }
+      }
+
+      // 2) Quick check for @mentions indicating an ad-hoc agentic workflow
+      const mentioned = this.parseMentions(userMessage);
+      if (mentioned.length > 0) {
+        const allAgents = await getAllAgents();
+        const activeAgents = allAgents.filter(a => a.isActive && mentioned.map(m => m.toLowerCase()).includes(a.name.toLowerCase()));
+
+        if (activeAgents.length > 0) {
+          console.log('🚀 Detected agentic prompt – routing through CrewAI');
+          const crewProvider = new (await import('./providers/CrewAIProvider.js')).CrewAIProvider();
+          const crewResult = await crewProvider.sendMessage({ prompt: userMessage });
+
+          // Emit event if socket available
+          if (io && conversationId) {
+            io.to(conversationId).emit('agentic-workflow-complete', {
+              workflowId: 'ad-hoc',
+              result: crewResult.content
+            });
+          }
+
+          return {
+            content: crewResult.content,
+            metadata: {
+              provider: 'crewai',
+              agentsInvolved: activeAgents.map(a => a.name),
+              serverLaunchResult
+            }
+          };
+        }
+      }
+
       console.log(`🎯 Processing message with orchestrator: "${userMessage}"`);
 
-      // Use the new orchestrator workflow
+      // 3) Use the new orchestrator workflow
       let workflowResult = await orchestratorService.orchestrateWorkflow(
         userMessage,
         conversationHistory,

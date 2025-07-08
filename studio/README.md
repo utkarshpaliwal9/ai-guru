@@ -348,17 +348,11 @@ The platform features a modern, beautiful interface with:
 
 ## 🤝 Contributing
 
-We welcome contributions! Please follow these steps:
+We welcome contributions! Please see our `CONTRIBUTING.md` for guidelines.
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
+## 📄 License
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the `LICENSE` file for details.
 
 ## 🙋‍♂️ Support
 
@@ -430,6 +424,61 @@ providerFactory.registerProvider('claude', ClaudeProvider);
 - [ ] **Cloud Deployment** templates
 - [ ] **Advanced Analytics** and monitoring
 - [ ] **Theme Customization**
+
+## 🐍 Python CrewAI Service
+
+This project includes a Python service for CrewAI agents, located in the `python/crewai_service` directory. This service allows you to integrate CrewAI workflows into the platform.
+
+### Setup and Installation
+
+1.  **Navigate to the CrewAI service directory:**
+    ```bash
+    cd python/crewai_service
+    ```
+
+2.  **Create a Python virtual environment:**
+    It's highly recommended to use a virtual environment to manage dependencies.
+    ```bash
+    python3 -m venv venv
+    ```
+
+3.  **Activate the virtual environment:**
+    -   On macOS/Linux:
+        ```bash
+        source venv/bin/activate
+        ```
+    -   On Windows (Command Prompt):
+        ```bash
+        .\venv\Scripts\activate.bat
+        ```
+    -   On Windows (PowerShell):
+        ```bash
+        .\venv\Scripts\Activate.ps1
+        ```
+
+4.  **Install dependencies:**
+    With the virtual environment activated, install the required Python packages:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+5.  **Deactivate the virtual environment (when done):**
+    ```bash
+    deactivate
+    ```
+
+### Running the CrewAI Service
+
+After installation, you can run the CrewAI service using uvicorn:
+
+```bash
+# Make sure your virtual environment is activated
+uvicorn main:app --host 0.0.0.0 --port 5001 --reload
+```
+
+### Ignoring Virtual Environment in Git
+
+The virtual environment directory (`venv/`) is automatically ignored by Git using the `.gitignore` file at the project root.
 
 ---
 

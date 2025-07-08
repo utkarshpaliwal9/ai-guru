@@ -1,5 +1,6 @@
 import { AlfaProvider } from './AlfaProvider.js';
 import { OpenAIProvider } from './OpenAIProvider.js';
+import { CrewAIProvider } from './CrewAIProvider.js';
 
 /**
  * LLM Provider Factory
@@ -18,6 +19,7 @@ export class ProviderFactory {
   registerDefaultProviders() {
     this.registerProvider('alfa', AlfaProvider);
     this.registerProvider('openai', OpenAIProvider);
+    this.registerProvider('crewai', CrewAIProvider);
   }
 
   /**
