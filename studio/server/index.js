@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import dotenv from 'dotenv';
 import conversationRoutes from './routes/conversations.js';
 import agentsRoutes from './routes/agents.js';
+import agentServersRoutes from './routes/agentServers.js';
 import mcpRoutes from './routes/mcp.js';
 import providersRoutes from './routes/providers.js';
 import orchestratorRoutes from './routes/orchestrator.js';
@@ -44,6 +45,7 @@ await initializeStorage();
 // Routes
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/agents', agentsRoutes);
+app.use('/api/agent-servers', agentServersRoutes);
 app.use('/api/mcp', mcpRoutes);
 app.use('/api/providers', providersRoutes);
 app.use('/api/orchestrator', orchestratorRoutes);

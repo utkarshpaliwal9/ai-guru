@@ -206,6 +206,50 @@ class MCPService {
   }
 
   /**
+   * Call a specific MCP tool
+   */
+  async callMCPTool(agentId, toolName, toolArgs = {}) {
+    try {
+      const connection = this.connections.get(agentId);
+      if (!connection) {
+        throw new Error(`No MCP connection found for agent ${agentId}`);
+      }
+
+      const { client, agent } = connection;
+
+      // Get available tools from the MCP server
+      const tools = await client.listTools();
+
+      // Find the specific tool
+      const tool = tools.tools?.find(t => t.name === toolName);
+      if (!tool) {
+        throw new Error(`Tool '${toolName}' not found. Available tools: ${tools.tools?.map(t => t.name).join(', ') || 'none'}`);
+      }
+
+      // Call the tool with the provided arguments
+      const result = await client.callTool({
+        name: toolName,
+        arguments: toolArgs
+      });
+
+      return {
+        success: true,
+        content: result.content || 'Tool executed successfully',
+        result: result,
+        metadata: {
+          tool: toolName,
+          agentName: agent.name,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+    } catch (error) {
+      console.error(`❌ Error calling MCP tool ${toolName} for agent ${agentId}:`, error.message);
+      throw error;
+    }
+  }
+
+  /**
    * Get available tools for an agent
    */
   async getAgentTools(agentId) {

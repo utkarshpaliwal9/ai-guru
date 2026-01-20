@@ -5,7 +5,7 @@ import {
   getAllAgents, 
   deleteAgent 
 } from '../utils/storage.js';
-import { testAgentConnection } from '../services/agentService.js';
+import { testAgentConnection, callAgentAPI } from '../services/agentService.js';
 
 const router = express.Router();
 
@@ -248,6 +248,30 @@ router.post('/:id/debug-spawn', async (req, res) => {
       success: false, 
       error: error.message 
     });
+  }
+});
+
+// Execute agent with message
+router.post('/:id/execute', async (req, res) => {
+  try {
+    const agentId = req.params.id;
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'message is required' });
+    }
+    const agent = await getAgent(agentId);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+    const result = await callAgentAPI(agent, {
+      currentMessage: message,
+      conversationHistory: [],
+      timestamp: new Date().toISOString(),
+    });
+    res.json(result);
+  } catch (error) {
+    console.error('Error executing agent:', error);
+    res.status(500).json({ error: 'Agent execution failed' });
   }
 });
 

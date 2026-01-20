@@ -197,8 +197,8 @@ The orchestrator requires Alfa AI configuration:
 # Required
 ALFA_AUTH_TOKEN=your-auth-token
 ALFA_PROJECT_ID=your-project-id  
-ALFA_CHAT_HOST=https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io
-ALFA_API_HOST=https://clip-api.gamma.qa.us-west-2.aws.avalara.io
+ALFA_CHAT_HOST=https://your-ai-chat-endpoint.com/v1/chat
+ALFA_API_HOST=https://your-ai-api-endpoint.com/v1
 
 # Optional but recommended
 ALFA_INDEX_ID=your-index-id

@@ -11,10 +11,19 @@
     "start": "cd server && npm start",
     "install-all": "npm install && cd server && npm install && cd ../client && npm install"
   },
-  "keywords": ["ai", "chatbot", "agents", "mcp", "conversation"],
+  "keywords": [
+    "ai",
+    "chatbot",
+    "agents",
+    "mcp",
+    "conversation"
+  ],
   "author": "AI Guru Studio",
   "license": "MIT",
   "devDependencies": {
     "concurrently": "^8.2.2"
+  },
+  "dependencies": {
+    "socket.io-client": "^4.8.1"
   }
-} 
+}
