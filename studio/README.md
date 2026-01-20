@@ -21,6 +21,52 @@ Users can **export solutions as named workflows**, which are saved and shared ac
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.42.07 PM.png" alt="Chat Interface" width="800"/>
+  <br/>
+  <em>Conversational AI interface with real-time agent coordination</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.51.09 PM.png" alt="Agent Management" width="800"/>
+  <br/>
+  <em>Agent management dashboard</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.51.21 PM.png" alt="Workflow Builder" width="800"/>
+  <br/>
+  <em>Visual workflow builder and configuration</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.54.26 PM.png" alt="Multi-Agent Collaboration" width="800"/>
+  <br/>
+  <em>Multiple agents working together on complex tasks</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.55.27 PM.png" alt="Real-time Execution" width="800"/>
+  <br/>
+  <em>Real-time workflow execution and monitoring</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.57.47 PM.png" alt="Workflow Management" width="800"/>
+  <br/>
+  <em>Workflow management and history</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.58.02 PM.png" alt="Agent Configuration" width="800"/>
+  <br/>
+  <em>Detailed agent configuration options</em>
+</p>
+
+---
+
 ## 🧩 Core Principles
 
 | Principle | Description |
