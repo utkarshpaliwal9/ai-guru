@@ -21,15 +21,6 @@ Users can **export solutions as named workflows**, which are saved and shared ac
 
 ---
 
-
-<p align="center">
-  <img src="docs/screenshots/Screenshot 2025-07-25 at 6.58.02 PM.png" alt="Agent Configuration" width="800"/>
-  <br/>
-  <em>Detailed agent configuration options</em>
-</p>
-
----
-
 ## 🧩 Core Principles
 
 | Principle | Description |
