@@ -127,8 +127,8 @@ export class ProviderFactory {
         name: 'my-alfa-agent',
         authToken: 'your-auth-token',
         projectId: 'your-project-uuid',
-        chatHost: 'https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1/chat',
-        apiHost: 'https://alfa.gamma.qa.us-west-2.aws.avalara.io/v1', // Optional for RAG and document uploads
+        chatHost: process.env.ALFA_CHAT_HOST || 'https://your-ai-chat-endpoint.com/v1/chat',
+        apiHost: process.env.ALFA_API_HOST || 'https://your-ai-api-endpoint.com/v1', // Optional for RAG and document uploads
         model: 'gpt-4o-mini',
         indexId: 'your-index-uuid', // Optional for RAG
         ragEnabled: true,

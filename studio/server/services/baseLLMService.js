@@ -29,19 +29,19 @@ class BaseLLMService {
 
     if (missingVars.length > 0) {
       const errorMessage = [
-        '🚫 Alfa AI credentials not configured!',
+        '🚫 AI credentials not configured!',
         '',
         'Missing environment variables:',
         ...missingVars.map(varName => `  - ${varName}`),
         '',
-        'To configure Alfa AI, add these to your server/.env file:',
+        'To configure the AI service, add these to your server/.env file:',
         '  ALFA_AUTH_TOKEN=your-auth-token-here',
         '  ALFA_PROJECT_ID=your-project-uuid-here',
-        '  ALFA_CHAT_HOST=https://clip-chat-api.gamma.qa.us-west-2.aws.avalara.io',
-        '  ALFA_API_HOST=https://clip-api.gamma.qa.us-west-2.aws.avalara.io',
+        '  ALFA_CHAT_HOST=https://your-ai-chat-endpoint.com/v1/chat',
+        '  ALFA_API_HOST=https://your-ai-api-endpoint.com/v1',
         '  ALFA_MODEL=gpt-4o-mini',
         '',
-        'Contact your Avalara administrator to obtain these credentials.'
+        'Contact your administrator to obtain these credentials.'
       ].join('\n');
 
       console.error(errorMessage);
